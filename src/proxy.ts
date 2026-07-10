@@ -46,7 +46,8 @@ export const config = {
      * Run on all paths except:
      * - api (Auth.js handlers live under /api/auth and must not be guarded)
      * - _next/static, _next/image, favicon, manifest, icon, and image assets
+     * - sw.js (the PWA service worker must be publicly fetchable, not redirected to login)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
