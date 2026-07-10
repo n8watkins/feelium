@@ -229,17 +229,24 @@ function OutcomeControl({
 }) {
   if (outcome.inputType === "rating") {
     const anchors = ratingAnchors(outcome.desiredDirection);
+    const anchorsId = `rating-anchors-${outcome.id}`;
     return (
       <div className="space-y-1.5">
-        <div role="group" aria-label={outcome.name} className="flex gap-2">
+        <div
+          role="group"
+          aria-label={outcome.name}
+          aria-describedby={anchorsId}
+          className="flex gap-2"
+        >
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
               aria-pressed={answer.rating === n}
+              aria-label={`${n} out of 5`}
               onClick={() => onChange({ rating: answer.rating === n ? null : n })}
               className={cn(
-                "flex h-12 flex-1 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors",
+                "flex h-12 flex-1 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 answer.rating === n
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background hover:bg-accent",
@@ -250,7 +257,10 @@ function OutcomeControl({
           ))}
         </div>
         {/* Anchor the bare 1-5 with meaning and (when set) the desired direction. */}
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div
+          id={anchorsId}
+          className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+        >
           <span>1 · {anchors.low}</span>
           {anchors.hint ? (
             <span className="font-medium text-foreground/70">{anchors.hint}</span>
@@ -276,7 +286,7 @@ function OutcomeControl({
               onChange({ boolean: answer.boolean === val ? null : val })
             }
             className={cn(
-              "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors",
+              "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               answer.boolean === val
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border bg-background hover:bg-accent",
@@ -318,7 +328,7 @@ function TagChip({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-sm transition-colors",
+        "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-background hover:bg-accent",

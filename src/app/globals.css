@@ -128,3 +128,20 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Reduced-motion support (PRD 24). Users who ask their OS to minimize motion get near-
+ * instant transitions/animations instead of the app's fades, zooms, and sparkline reveals.
+ * Near-zero (not zero) so animationend still fires and Radix presence transitions - e.g.
+ * dialog close - resolve cleanly. smooth scrolling is disabled too.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

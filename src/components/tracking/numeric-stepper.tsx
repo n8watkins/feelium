@@ -103,7 +103,7 @@ export function NumericStepper({
         aria-label={
           recorded ? `${label}: ${display}. Tap to edit` : `${label}: not recorded. Tap to enter a value`
         }
-        className="min-w-20 flex-1 rounded-md py-2 text-center text-lg font-semibold tabular-nums transition-colors hover:bg-accent"
+        className="min-w-20 flex-1 rounded-md py-2 text-center text-lg font-semibold tabular-nums transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {display}
       </button>

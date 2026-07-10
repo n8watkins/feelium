@@ -117,7 +117,7 @@ export default async function TodayPage({
           {latest ? (
             <Link
               href={`/checkin/${latest.checkIn.id}`}
-              className="block rounded-lg border border-border p-4 transition-colors hover:bg-accent"
+              className="block rounded-lg border border-border p-4 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">

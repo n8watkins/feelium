@@ -106,7 +106,7 @@ export default async function SettingsPage() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+                  className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   <link.icon
                     className="size-5 text-muted-foreground"
@@ -142,7 +142,7 @@ export default async function SettingsPage() {
             <nav>
               <Link
                 href="/settings/notifications"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="flex-1">
                   <span className="block text-sm font-medium">Daily reminder</span>
@@ -173,7 +173,7 @@ export default async function SettingsPage() {
             <nav>
               <Link
                 href="/settings/data"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="flex-1">
                   <span className="block text-sm font-medium">Export or delete</span>
@@ -207,7 +207,7 @@ export default async function SettingsPage() {
             <nav>
               <Link
                 href="/settings/privacy"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="flex-1">
                   <span className="block text-sm font-medium">Privacy &amp; your data</span>

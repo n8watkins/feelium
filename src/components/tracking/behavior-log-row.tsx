@@ -137,7 +137,7 @@ function ChoiceButton({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors",
+        "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-background hover:bg-accent",
