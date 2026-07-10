@@ -1,7 +1,7 @@
 # Personal Behavior & Feeling Tracker
 
 A mobile-first Progressive Web App for connecting what you do with how you feel.
-The product name is a placeholder ("Untitled") for now and lives behind a single config module - see [Branding](#branding-single-config-point).
+The product name (feelium) lives behind a single config module - see [Branding](#branding-single-config-point).
 
 This repository currently contains the **Phase 1 Foundation** (per `docs/PRD.md`): the Next.js app shell, authentication, the full database schema, app-layer authorization, and the base design system.
 It runs entirely locally - no Docker, no cloud services, and no external accounts.
@@ -80,6 +80,52 @@ Optional email + password sign-in and sign-up are also available on the same scr
 | `npm run db:migrate` | Apply migrations to the local SQLite file           |
 | `npm run db:studio`  | Open Drizzle Studio to browse the local database    |
 | `npm run db:reset`   | Delete and recreate the local database from migrations |
+
+## Deployment (Vercel + Turso)
+
+The app is built to deploy on Vercel with a cloud [Turso](https://turso.tech) libSQL database, while local development is unchanged (a plain SQLite file, magic links printed to the console).
+
+Nothing in this repository provisions cloud resources - provisioning (the Turso database, the Vercel project, the GitHub OAuth app, and the Resend domain) is done separately.
+
+### Runtime and database
+
+- The libSQL client (`src/db/index.ts`) uses the cloud Turso database when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, and the local `DATABASE_URL` file otherwise.
+- `@libsql/client` talks to Turso over HTTP, so it runs in Vercel's default Node.js serverless runtime with no extra configuration.
+- Auth.js runs with `trustHost: true` for Vercel's proxy; it derives its base URL from `AUTH_URL` and, because that is `https` in production, automatically issues secure, host-prefixed session cookies.
+
+### Running migrations against Turso
+
+Migrations are not run during `next build`.
+Apply them once against the Turso database (from your machine or CI) whenever the schema changes:
+
+```bash
+TURSO_DATABASE_URL=libsql://<db>.turso.io TURSO_AUTH_TOKEN=<token> npm run db:migrate
+```
+
+The same migration files in `drizzle/` apply to both local SQLite and cloud Turso.
+
+### OAuth and email in production
+
+- Add the production callback URL `https://<your-domain>/api/auth/callback/github` to the GitHub OAuth app (alongside the local one).
+- Resend requires a **verified sender domain**; set `AUTH_EMAIL_FROM` to an address on that domain. The default (`feelium <onboarding@resend.dev>`) is Resend's shared testing sender and only delivers to the Resend account owner.
+
+### Production environment variables
+
+Set these in the Vercel project (never commit real values).
+"Secret" marks values that must be kept confidential.
+
+| Variable             | Required | Secret | Description                                                                                  |
+| -------------------- | -------- | ------ | -------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`        | Yes      | Yes    | Session-encryption secret. Generate with `npx auth secret`.                                   |
+| `AUTH_URL`           | Yes      | No     | Canonical base URL, e.g. `https://feelium.example.com`. Drives callback URLs and secure cookies. |
+| `TURSO_DATABASE_URL` | Yes      | No     | Cloud Turso database URL (`libsql://…`). Takes precedence over `DATABASE_URL`.                 |
+| `TURSO_AUTH_TOKEN`   | Yes      | Yes    | Turso database auth token.                                                                     |
+| `AUTH_GITHUB_ID`     | Yes      | No     | GitHub OAuth app client ID (public).                                                           |
+| `AUTH_GITHUB_SECRET` | Yes      | Yes    | GitHub OAuth app client secret.                                                               |
+| `AUTH_RESEND_KEY`    | Yes      | Yes    | Resend API key for sending magic-link emails.                                                  |
+| `AUTH_EMAIL_FROM`    | No       | No     | From address for magic-link emails (verified Resend domain). Defaults to `feelium <onboarding@resend.dev>`. |
+
+`DATABASE_URL` is not used in production when the `TURSO_*` variables are set.
 
 ## Project structure
 
