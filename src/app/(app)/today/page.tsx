@@ -66,28 +66,44 @@ export default async function TodayPage({
             <EmptyState
               icon={CircleCheck}
               title="No active behaviors"
-              description="Add behaviors in Settings to start recording what you do each day."
+              description="Add a behavior to start recording what you do each day."
+              action={
+                <Button asChild size="sm">
+                  <Link href="/settings/behaviors/new?from=/today">
+                    <Plus className="size-4" aria-hidden="true" />
+                    Add behavior
+                  </Link>
+                </Button>
+              }
             />
           ) : (
-            <ul className="space-y-2">
-              {behaviors.map((behavior) => {
-                const entry = entries.get(behavior.id);
-                return (
-                  <BehaviorLogRow
-                    key={behavior.id}
-                    behavior={{
-                      id: behavior.id,
-                      name: behavior.name,
-                      inputType: behavior.inputType,
-                      unit: behavior.unit,
-                    }}
-                    entryDate={localDate}
-                    booleanValue={entry?.booleanValue ?? null}
-                    numericValue={entry?.numericValue ?? null}
-                  />
-                );
-              })}
-            </ul>
+            <>
+              <ul className="space-y-2">
+                {behaviors.map((behavior) => {
+                  const entry = entries.get(behavior.id);
+                  return (
+                    <BehaviorLogRow
+                      key={behavior.id}
+                      behavior={{
+                        id: behavior.id,
+                        name: behavior.name,
+                        inputType: behavior.inputType,
+                        unit: behavior.unit,
+                      }}
+                      entryDate={localDate}
+                      booleanValue={entry?.booleanValue ?? null}
+                      numericValue={entry?.numericValue ?? null}
+                    />
+                  );
+                })}
+              </ul>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/settings/behaviors/new?from=/today">
+                  <Plus className="size-4" aria-hidden="true" />
+                  Add behavior
+                </Link>
+              </Button>
+            </>
           )}
         </section>
 

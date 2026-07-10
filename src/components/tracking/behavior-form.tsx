@@ -30,6 +30,7 @@ export function BehaviorForm({
   behaviorId,
   defaults,
   lockInputType = false,
+  returnTo,
 }: {
   action: (
     prev: BehaviorFormState,
@@ -39,6 +40,8 @@ export function BehaviorForm({
   behaviorId?: string;
   defaults?: BehaviorFormDefaults;
   lockInputType?: boolean;
+  // Where to go after a successful save (e.g. back to Today when added from there).
+  returnTo?: string;
 }) {
   const [state, formAction, isPending] = useActionState<BehaviorFormState, FormData>(
     action,
@@ -47,9 +50,13 @@ export function BehaviorForm({
 
   // Controlled so their selection survives React 19's post-action form reset (the
   // reset only affects uncontrolled inputs, which repopulate from state.values below).
-  const [inputType, setInputType] = useState<string>(defaults?.inputType ?? "");
+  // New behaviors start on the most common choices (Yes/No, Neutral) so creating one
+  // takes no extra taps and can't fail validation for an unpicked type/direction.
+  const [inputType, setInputType] = useState<string>(
+    defaults?.inputType ?? "boolean",
+  );
   const [direction, setDirection] = useState<string>(
-    defaults?.desiredDirection ?? "",
+    defaults?.desiredDirection ?? "neutral",
   );
 
   const isNumeric = inputType === "numeric";
@@ -58,6 +65,7 @@ export function BehaviorForm({
   return (
     <form action={formAction} className="space-y-6">
       {behaviorId ? <input type="hidden" name="id" value={behaviorId} /> : null}
+      {returnTo ? <input type="hidden" name="from" value={returnTo} /> : null}
 
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>

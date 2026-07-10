@@ -30,6 +30,7 @@ export function OutcomeForm({
   outcomeId,
   defaults,
   lockInputType = false,
+  returnTo,
 }: {
   action: (
     prev: OutcomeFormState,
@@ -39,6 +40,8 @@ export function OutcomeForm({
   outcomeId?: string;
   defaults?: OutcomeFormDefaults;
   lockInputType?: boolean;
+  // Where to go after a successful save (e.g. back to the check-in that launched it).
+  returnTo?: string;
 }) {
   const [state, formAction, isPending] = useActionState<OutcomeFormState, FormData>(
     action,
@@ -56,6 +59,7 @@ export function OutcomeForm({
   return (
     <form action={formAction} className="space-y-6">
       {outcomeId ? <input type="hidden" name="id" value={outcomeId} /> : null}
+      {returnTo ? <input type="hidden" name="from" value={returnTo} /> : null}
 
       <div className="space-y-2">
         <Label htmlFor="name">Name</Label>
