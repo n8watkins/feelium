@@ -1,31 +1,17 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
+import { checkInTags, checkInValues, checkIns, outcomeMetrics } from "@/db/schema";
 import {
-  checkInTags,
-  checkInValues,
-  checkIns,
-  outcomeMetrics,
-  tags,
-} from "@/db/schema";
+  createCheckInForUser,
+  updateCheckInForUser,
+  type CheckInPayload,
+} from "./checkin-writes";
 import { requireUserId } from "./session";
 
-export type CheckInValueInput = {
-  outcomeMetricId: string;
-  rating: number | null;
-  boolean: boolean | null;
-  numeric: number | null;
-};
-
-export type CheckInPayload = {
-  localDate: string;
-  note: string | null;
-  values: CheckInValueInput[];
-  tagIds: string[];
-  newTagNames: string[];
-};
+export type { CheckInPayload, CheckInValueInput } from "./checkin-writes";
 
 /** Count of check-ins the current user recorded on a given local calendar date. */
 export async function countCheckInsForDate(localDate: string): Promise<number> {
@@ -91,144 +77,22 @@ export async function getCheckInDetail(id: string) {
   return { checkIn, values, tagIds: tagRows.map((t) => t.tagId) };
 }
 
-// Keeps only answered values whose metric the user actually owns.
-async function ownedAnsweredValues(userId: string, values: CheckInValueInput[]) {
-  const answered = values.filter(
-    (v) => v.rating != null || v.boolean != null || v.numeric != null,
-  );
-  if (answered.length === 0) return [];
-  const ids = [...new Set(answered.map((v) => v.outcomeMetricId))];
-  const owned = await db
-    .select({ id: outcomeMetrics.id })
-    .from(outcomeMetrics)
-    .where(
-      and(eq(outcomeMetrics.userId, userId), inArray(outcomeMetrics.id, ids)),
-    );
-  const ownedSet = new Set(owned.map((o) => o.id));
-  return answered.filter((v) => ownedSet.has(v.outcomeMetricId));
-}
-
-// Resolves the final tag id set: owned existing ids plus newly-created (deduped) tags.
-async function resolveTagIds(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  userId: string,
-  tagIds: string[],
-  newTagNames: string[],
-): Promise<string[]> {
-  const result = new Set<string>();
-
-  if (tagIds.length > 0) {
-    const owned = await tx
-      .select({ id: tags.id })
-      .from(tags)
-      .where(and(eq(tags.userId, userId), inArray(tags.id, tagIds)));
-    owned.forEach((t) => result.add(t.id));
-  }
-
-  const names = [...new Set(newTagNames.map((n) => n.trim()).filter(Boolean))];
-  if (names.length > 0) {
-    await tx
-      .insert(tags)
-      .values(names.map((name) => ({ userId, name })))
-      .onConflictDoNothing({ target: [tags.userId, tags.name] });
-    const rows = await tx
-      .select({ id: tags.id })
-      .from(tags)
-      .where(and(eq(tags.userId, userId), inArray(tags.name, names)));
-    rows.forEach((t) => result.add(t.id));
-  }
-
-  return [...result];
-}
-
+/**
+ * Creates a check-in for the current session user. The write itself lives in
+ * ./checkin-writes (session-free, so it is integration-tested directly against a Turso
+ * target) and uses `db.batch()` rather than an interactive transaction - see that module
+ * for why that matters on libSQL/Turso over HTTP.
+ */
 export async function createCheckIn(payload: CheckInPayload): Promise<string> {
   const userId = await requireUserId();
-  const values = await ownedAnsweredValues(userId, payload.values);
-
-  return db.transaction(async (tx) => {
-    const [checkIn] = await tx
-      .insert(checkIns)
-      .values({ userId, localDate: payload.localDate, note: payload.note })
-      .returning({ id: checkIns.id });
-    const checkInId = checkIn.id;
-
-    if (values.length > 0) {
-      await tx.insert(checkInValues).values(
-        values.map((v) => ({
-          userId,
-          checkInId,
-          outcomeMetricId: v.outcomeMetricId,
-          ratingValue: v.rating,
-          booleanValue: v.boolean,
-          numericValue: v.numeric,
-        })),
-      );
-    }
-
-    const finalTagIds = await resolveTagIds(
-      tx,
-      userId,
-      payload.tagIds,
-      payload.newTagNames,
-    );
-    if (finalTagIds.length > 0) {
-      await tx
-        .insert(checkInTags)
-        .values(finalTagIds.map((tagId) => ({ checkInId, tagId })));
-    }
-
-    return checkInId;
-  });
+  return createCheckInForUser(db, userId, payload);
 }
 
-/** Replaces a check-in's note, values, and tags. Owner-scoped. */
+/** Replaces a check-in's note, values, and tags for the current session user. */
 export async function updateCheckIn(
   id: string,
   payload: CheckInPayload,
 ): Promise<boolean> {
   const userId = await requireUserId();
-  const [existing] = await db
-    .select({ id: checkIns.id })
-    .from(checkIns)
-    .where(and(eq(checkIns.id, id), eq(checkIns.userId, userId)))
-    .limit(1);
-  if (!existing) return false;
-
-  const values = await ownedAnsweredValues(userId, payload.values);
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(checkIns)
-      .set({ note: payload.note })
-      .where(and(eq(checkIns.id, id), eq(checkIns.userId, userId)));
-
-    await tx.delete(checkInValues).where(eq(checkInValues.checkInId, id));
-    if (values.length > 0) {
-      await tx.insert(checkInValues).values(
-        values.map((v) => ({
-          userId,
-          checkInId: id,
-          outcomeMetricId: v.outcomeMetricId,
-          ratingValue: v.rating,
-          booleanValue: v.boolean,
-          numericValue: v.numeric,
-        })),
-      );
-    }
-
-    await tx.delete(checkInTags).where(eq(checkInTags.checkInId, id));
-    const finalTagIds = await resolveTagIds(
-      tx,
-      userId,
-      payload.tagIds,
-      payload.newTagNames,
-    );
-    if (finalTagIds.length > 0) {
-      await tx
-        .insert(checkInTags)
-        .values(finalTagIds.map((tagId) => ({ checkInId: id, tagId })));
-    }
-  });
-
-  return true;
+  return updateCheckInForUser(db, userId, id, payload);
 }

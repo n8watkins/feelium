@@ -42,7 +42,8 @@ export async function createCheckInAction(
   }
 
   revalidateCheckInViews(payload.localDate);
-  redirect("/today");
+  // Land back on Today with a success confirmation (the ?checkin=saved flag drives a toast).
+  redirect("/today?checkin=saved");
 }
 
 export async function updateCheckInAction(
