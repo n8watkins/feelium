@@ -1,5 +1,6 @@
 import { Bell, Database, ListChecks } from "lucide-react";
 
+import { auth } from "@/auth";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -10,14 +11,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/server/data";
 import { signOut } from "./actions";
 
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await auth();
+  const profile = await getCurrentProfile();
+  const weekStart = WEEKDAYS[profile?.weekStartsOn ?? 1] ?? "Monday";
 
   return (
     <>
@@ -26,7 +36,7 @@ export default async function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Account</CardTitle>
-            <CardDescription>{user?.email ?? "Signed in"}</CardDescription>
+            <CardDescription>{session?.user?.email ?? "Signed in"}</CardDescription>
           </CardHeader>
           <CardContent>
             <form action={signOut}>
@@ -41,12 +51,24 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Preferences</CardTitle>
             <CardDescription>
-              Appearance now; timezone and start of week arrive with tracking setup.
+              Editing timezone and start of week arrives with tracking setup.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <span className="text-sm font-medium">Theme</span>
-            <ModeToggle />
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Theme</span>
+              <ModeToggle />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Timezone</span>
+              <span className="text-sm text-muted-foreground">
+                {profile?.timezone ?? "UTC"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Start of week</span>
+              <span className="text-sm text-muted-foreground">{weekStart}</span>
+            </div>
           </CardContent>
         </Card>
 

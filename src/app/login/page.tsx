@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { branding } from "@/config/branding";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +9,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/server";
 import {
-  signInWithMagicLink,
+  sendMagicLink,
   signInWithPassword,
   signUpWithPassword,
 } from "./actions";
@@ -21,18 +18,9 @@ import {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string; next?: string }>;
 }) {
-  const { error, sent } = await searchParams;
-
-  // Authenticated users never see the login screen.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    redirect("/today");
-  }
+  const { error, sent, next } = await searchParams;
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
@@ -72,6 +60,7 @@ export default async function LoginPage({
             ) : null}
 
             <form className="space-y-4">
+              <input type="hidden" name="next" value={next ?? ""} />
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -86,7 +75,7 @@ export default async function LoginPage({
 
               <Button
                 type="submit"
-                formAction={signInWithMagicLink}
+                formAction={sendMagicLink}
                 className="w-full"
               >
                 Email me a magic link

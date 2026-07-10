@@ -50,7 +50,7 @@ export const branding = {
     tagline: "What did I do, how did I feel, and are they connected?",
     authSubtitle: "Sign in to record what you did and how you felt.",
     magicLinkSent:
-      "Check your email for a sign-in link. It opens the app straight away.",
+      "Check your email for the sign-in link. In local development it is printed to the server console instead.",
   },
 
   icons: ICONS,

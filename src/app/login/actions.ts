@@ -1,76 +1,92 @@
 "use server";
 
-import { headers } from "next/headers";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { signIn } from "@/auth";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
-const DEFAULT_NEXT = "/today";
+const MIN_PASSWORD_LENGTH = 8;
 
-async function getOrigin() {
-  const headerList = await headers();
-  // `origin` is present on Server Action requests; fall back to the local dev origin.
-  return headerList.get("origin") ?? "http://localhost:3000";
+function readEmail(formData: FormData): string {
+  return String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 /**
- * Default sign-in: email magic link (email OTP). Sends a link that opens the
- * server-side /auth/confirm route (token_hash + verifyOtp flow).
+ * DEFAULT sign-in: email magic link. In local dev the link is printed to the server
+ * console by the Nodemailer provider's sendVerificationRequest override.
  */
-export async function signInWithMagicLink(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+export async function sendMagicLink(formData: FormData) {
+  const email = readEmail(formData);
+  const next = safeRedirectPath(formData.get("next") as string | null);
   if (!email) {
     redirect("/login?error=Enter+your+email+address");
   }
 
-  const supabase = await createClient();
-  const origin = await getOrigin();
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${origin}/auth/confirm?next=${DEFAULT_NEXT}` },
-  });
-
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  try {
+    await signIn("nodemailer", { email, redirect: false, redirectTo: next });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect("/login?error=Could+not+send+sign-in+link");
+    }
+    throw error;
   }
   redirect("/login?sent=1");
 }
 
 /** Optional email + password sign-in. */
 export async function signInWithPassword(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = readEmail(formData);
   const password = String(formData.get("password") ?? "");
+  const next = safeRedirectPath(formData.get("next") as string | null);
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  try {
+    await signIn("credentials", { email, password, redirectTo: next });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect("/login?error=Invalid+email+or+password");
+    }
+    throw error; // re-throw the NEXT_REDIRECT thrown on success
   }
-  redirect(DEFAULT_NEXT);
 }
 
-/** Optional email + password sign-up. Locally, email confirmation is disabled so the
- *  session is created immediately. */
+/** Optional email + password sign-up. Creates the user with a hashed password. */
 export async function signUpWithPassword(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = readEmail(formData);
   const password = String(formData.get("password") ?? "");
+  const next = safeRedirectPath(formData.get("next") as string | null);
 
-  const supabase = await createClient();
-  const origin = await getOrigin();
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: `${origin}/auth/confirm?next=${DEFAULT_NEXT}` },
-  });
+  if (!email) {
+    redirect("/login?error=Enter+your+email+address");
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    redirect("/login?error=Password+must+be+at+least+8+characters");
+  }
 
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (existing) {
+    redirect("/login?error=An+account+with+that+email+already+exists");
   }
-  // With email confirmations off (local), a session exists right away.
-  if (data.session) {
-    redirect(DEFAULT_NEXT);
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await db.insert(users).values({ email, passwordHash });
+
+  try {
+    await signIn("credentials", { email, password, redirectTo: next });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect("/login?error=Could+not+sign+in+after+sign-up");
+    }
+    throw error;
   }
-  redirect("/login?sent=1");
 }
