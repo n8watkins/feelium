@@ -2,16 +2,23 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { CheckInForm } from "@/components/tracking/check-in-form";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { getCheckInDetail, listOutcomeMetrics, listTags } from "@/server/data";
 
 export const metadata = { title: "Edit check-in" };
 
 export default async function EditCheckInPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
+  // Only accept an internal path; History passes the day it was launched from.
+  const returnTo = from ? safeRedirectPath(from, "/today") : "/today";
+  const fromHistory = returnTo.startsWith("/history");
   const [detail, allOutcomes, tags] = await Promise.all([
     getCheckInDetail(id),
     listOutcomeMetrics(),
@@ -44,7 +51,11 @@ export default async function EditCheckInPage({
 
   return (
     <>
-      <PageHeader title="Edit check-in" backHref="/today" backLabel="Today" />
+      <PageHeader
+        title="Edit check-in"
+        backHref={returnTo}
+        backLabel={fromHistory ? "Day" : "Today"}
+      />
       <div className="px-4 pb-6 pt-2 md:px-8">
         <CheckInForm
           localDate={detail.checkIn.localDate}
@@ -54,6 +65,7 @@ export default async function EditCheckInPage({
           initialAnswers={initialAnswers}
           initialTagIds={detail.tagIds}
           initialNote={detail.checkIn.note ?? ""}
+          returnTo={fromHistory ? returnTo : undefined}
         />
       </div>
     </>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
   createCheckIn,
   updateCheckIn,
@@ -20,6 +21,13 @@ function hasContent(payload: CheckInPayload): boolean {
   return answered || hasNote || hasTags;
 }
 
+// A check-in shows on Today, on the History list, and on its date's day detail.
+function revalidateCheckInViews(localDate: string) {
+  revalidatePath("/today");
+  revalidatePath("/history");
+  revalidatePath(`/history/${localDate}`);
+}
+
 export async function createCheckInAction(
   payload: CheckInPayload,
 ): Promise<CheckInResult | void> {
@@ -33,14 +41,14 @@ export async function createCheckInAction(
     return { ok: false, error: "Something went wrong saving your check-in." };
   }
 
-  revalidatePath("/today");
-  revalidatePath("/history");
+  revalidateCheckInViews(payload.localDate);
   redirect("/today");
 }
 
 export async function updateCheckInAction(
   id: string,
   payload: CheckInPayload,
+  returnTo?: string,
 ): Promise<CheckInResult | void> {
   if (!hasContent(payload)) {
     return { ok: false, error: "Add at least one outcome, tag, or note." };
@@ -53,7 +61,7 @@ export async function updateCheckInAction(
     return { ok: false, error: "Something went wrong saving your check-in." };
   }
 
-  revalidatePath("/today");
-  revalidatePath("/history");
-  redirect("/today");
+  revalidateCheckInViews(payload.localDate);
+  // Edits launched from History return to that day; everything else to Today.
+  redirect(safeRedirectPath(returnTo, "/today"));
 }

@@ -38,6 +38,7 @@ export function CheckInForm({
   initialAnswers,
   initialTagIds = [],
   initialNote = "",
+  returnTo,
 }: {
   localDate: string;
   outcomes: OutcomeForForm[];
@@ -46,6 +47,8 @@ export function CheckInForm({
   initialAnswers?: Record<string, Answer>;
   initialTagIds?: string[];
   initialNote?: string;
+  // Where to go after an edit is saved (e.g. back to a History day). Create ignores it.
+  returnTo?: string;
 }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>(() => {
     const base: Record<string, Answer> = {};
@@ -101,7 +104,7 @@ export function CheckInForm({
     };
     startTransition(async () => {
       const result = checkInId
-        ? await updateCheckInAction(checkInId, payload)
+        ? await updateCheckInAction(checkInId, payload, returnTo)
         : await createCheckInAction(payload);
       if (result && !result.ok) toast.error(result.error);
     });
