@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
-import { ensureProfile } from "@/server/data";
+import { ensureProfile, StaleSessionError } from "@/server/data";
 
 /**
  * Layout for the authenticated app. Guards every child route with a server-side session
@@ -21,7 +21,16 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  await ensureProfile();
+  try {
+    await ensureProfile();
+  } catch (error) {
+    // Stale JWT whose user was deleted (account deletion elsewhere, or a dev DB reset):
+    // route through the recovery sign-out, which clears the cookie and lands on /login.
+    if (error instanceof StaleSessionError) {
+      redirect("/api/account/signout");
+    }
+    throw error;
+  }
 
   return (
     <div className="flex min-h-dvh">

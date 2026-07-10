@@ -8,3 +8,17 @@ export class InputTypeLockedError extends Error {
     this.name = "InputTypeLockedError";
   }
 }
+
+/**
+ * Raised when the session's JWT points to a user that no longer exists - after an account
+ * deletion on another device, or a database reset in development. The user row is gone, so
+ * any write scoped to it would fail a foreign-key constraint. Callers (the app layout)
+ * catch this and route the request through a cookie-clearing sign-out so the app lands
+ * cleanly on the login screen instead of crashing.
+ */
+export class StaleSessionError extends Error {
+  constructor(message = "Session refers to a user that no longer exists.") {
+    super(message);
+    this.name = "StaleSessionError";
+  }
+}

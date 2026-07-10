@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircleCheck,
   Database,
+  ShieldCheck,
   SmilePlus,
   Tag,
 } from "lucide-react";
@@ -158,16 +159,69 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="size-5 text-muted-foreground" aria-hidden="true" />
               Data
             </CardTitle>
             <CardDescription>
-              Export or delete your data. Available in the release-polish phase.
+              Your data is yours. Export it, or delete it anytime.
             </CardDescription>
           </CardHeader>
+          <CardContent className="p-0">
+            <nav>
+              <Link
+                href="/settings/data"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+              >
+                <span className="flex-1">
+                  <span className="block text-sm font-medium">Export or delete</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Download your data, delete tracking data, or delete your account
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </Link>
+            </nav>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck
+                className="size-5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              Privacy
+            </CardTitle>
+            <CardDescription>
+              How feelium keeps your entries private.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <nav>
+              <Link
+                href="/settings/privacy"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+              >
+                <span className="flex-1">
+                  <span className="block text-sm font-medium">Privacy &amp; your data</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Private by default - no sharing, no selling, no training
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </Link>
+            </nav>
+          </CardContent>
         </Card>
       </div>
     </>
