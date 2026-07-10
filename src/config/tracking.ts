@@ -74,6 +74,26 @@ export function outcomeDirectionLabel(value: OutcomeDirection | null): string {
   return OUTCOME_DIRECTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+/** Formats a recorded outcome value for compact display (e.g. "3/5", "Yes", "5 hours"). */
+export function formatOutcomeValue(value: {
+  inputType: OutcomeInputType;
+  unit: string | null;
+  rating: number | null;
+  boolean: boolean | null;
+  numeric: number | null;
+}): string {
+  if (value.inputType === "rating" && value.rating != null) {
+    return `${value.rating}/5`;
+  }
+  if (value.inputType === "boolean" && value.boolean != null) {
+    return value.boolean ? "Yes" : "No";
+  }
+  if (value.inputType === "numeric" && value.numeric != null) {
+    return `${value.numeric}${value.unit ? ` ${value.unit}` : ""}`;
+  }
+  return "—";
+}
+
 /** Suggested starter set (PRD 11.2). Names are editable during onboarding. */
 export type StarterBehavior = {
   name: string;
