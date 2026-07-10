@@ -1,0 +1,149 @@
+import "server-only";
+
+import { and, eq } from "drizzle-orm";
+
+import { db } from "@/db";
+import { pushSubscriptions, reminderSettings } from "@/db/schema";
+import { requireUserId } from "./session";
+
+/**
+ * Data access for notifications (PRD 17): the single optional daily reminder
+ * (reminder_setting) and Web Push subscriptions (push_subscription).
+ *
+ * Two groups of functions:
+ *   - User-scoped: call requireUserId() and only touch the session user's own rows.
+ *   - System-scoped: take an explicit userId / no session, for the guarded reminder-send
+ *     job (a scheduled trigger, not an interactive request). These must never be exposed
+ *     to the client without the cron secret guard on the send route.
+ */
+
+export type ReminderSettings = {
+  isEnabled: boolean;
+  /** Local time-of-day "HH:MM" for the daily reminder, or null if never set. */
+  reminderTime: string | null;
+  timezone: string;
+};
+
+/** The JSON shape a browser PushSubscription serializes to. */
+export type WebPushSubscriptionJSON = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+};
+
+const DEFAULT_REMINDER: ReminderSettings = {
+  isEnabled: false,
+  reminderTime: null,
+  timezone: "UTC",
+};
+
+// ---- User-scoped ---------------------------------------------------------------------
+
+/** The current user's reminder settings, or sensible defaults if they have none yet. */
+export async function getReminderSettings(): Promise<ReminderSettings> {
+  const userId = await requireUserId();
+  const [row] = await db
+    .select()
+    .from(reminderSettings)
+    .where(eq(reminderSettings.userId, userId))
+    .limit(1);
+  if (!row) return DEFAULT_REMINDER;
+  return {
+    isEnabled: row.isEnabled,
+    reminderTime: row.reminderTime,
+    timezone: row.timezone,
+  };
+}
+
+/** Creates or updates the current user's single daily reminder. */
+export async function upsertReminderSettings(input: ReminderSettings): Promise<void> {
+  const userId = await requireUserId();
+  await db
+    .insert(reminderSettings)
+    .values({
+      userId,
+      isEnabled: input.isEnabled,
+      reminderTime: input.reminderTime,
+      timezone: input.timezone,
+    })
+    .onConflictDoUpdate({
+      target: reminderSettings.userId,
+      set: {
+        isEnabled: input.isEnabled,
+        reminderTime: input.reminderTime,
+        timezone: input.timezone,
+        updatedAt: new Date(),
+      },
+    });
+}
+
+/** Stores (or refreshes) a Web Push subscription for the current user + device. */
+export async function savePushSubscription(
+  subscription: WebPushSubscriptionJSON,
+  deviceName?: string | null,
+): Promise<void> {
+  const userId = await requireUserId();
+  const data = subscription as unknown as Record<string, unknown>;
+  await db
+    .insert(pushSubscriptions)
+    .values({
+      userId,
+      endpoint: subscription.endpoint,
+      subscriptionData: data,
+      deviceName: deviceName ?? null,
+      lastUsedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [pushSubscriptions.userId, pushSubscriptions.endpoint],
+      set: { subscriptionData: data, lastUsedAt: new Date() },
+    });
+}
+
+/** Removes one of the current user's push subscriptions by endpoint. */
+export async function deleteMyPushSubscription(endpoint: string): Promise<void> {
+  const userId = await requireUserId();
+  await db
+    .delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+}
+
+/** All push subscriptions belonging to the current user (e.g. for a test send). */
+export async function listMyPushSubscriptions() {
+  const userId = await requireUserId();
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+}
+
+// ---- System-scoped (reminder-send job only) ------------------------------------------
+
+export type EnabledReminder = {
+  userId: string;
+  reminderTime: string;
+  timezone: string;
+};
+
+/** Every user with the reminder enabled and a time set. Used by the send job. */
+export async function listEnabledReminders(): Promise<EnabledReminder[]> {
+  const rows = await db
+    .select({
+      userId: reminderSettings.userId,
+      reminderTime: reminderSettings.reminderTime,
+      timezone: reminderSettings.timezone,
+    })
+    .from(reminderSettings)
+    .where(eq(reminderSettings.isEnabled, true));
+  return rows.flatMap((r) =>
+    r.reminderTime
+      ? [{ userId: r.userId, reminderTime: r.reminderTime, timezone: r.timezone }]
+      : [],
+  );
+}
+
+/** Push subscriptions for a given user (system context - no session). */
+export async function listPushSubscriptionsForUser(userId: string) {
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+}
+
+/** Prunes a dead subscription (system context) after a 404/410 from the push service. */
+export async function deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+}
