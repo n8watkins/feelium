@@ -10,6 +10,7 @@ export * from "./tags";
 export * from "./entries";
 export * from "./checkins";
 export * from "./history";
+export * from "./analytics";
 export * from "./starter";
 export { InputTypeLockedError } from "./errors";
 export type { BehaviorInput } from "./behaviors";
