@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.local.example
 
+# local sqlite database (libSQL file); keep the dir, ignore the db files
+/.data/*
+!/.data/.gitkeep
+
 # vercel
 .vercel
 
