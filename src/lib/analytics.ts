@@ -784,10 +784,16 @@ export function computeInsights(input: InsightsInput): InsightsData {
     }
   }
 
-  // Eligible comparisons first, then by the strength of the (absolute) difference so the
-  // most noticeable associations surface at the top.
+  // Eligible comparisons first; then comparisons between two active metrics ahead of any
+  // that involve an archived one (archived metrics still appear, just lower - PRD 16.6);
+  // then by the strength of the (absolute) difference so the most noticeable associations
+  // surface at the top.
+  const involvesArchived = (c: Comparison) => !c.behavior.isActive || !c.outcome.isActive;
   comparisons.sort((a, b) => {
     if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    const aArchived = involvesArchived(a);
+    const bArchived = involvesArchived(b);
+    if (aArchived !== bArchived) return aArchived ? 1 : -1;
     const da = Math.abs(a.difference ?? 0);
     const db = Math.abs(b.difference ?? 0);
     return db - da;
