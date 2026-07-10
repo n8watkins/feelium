@@ -3,16 +3,14 @@
  * fields, icon references, and key marketing copy.
  *
  * Fleet requirement: NOTHING else in the codebase should hardcode the product name or
- * brand copy. Import from here instead, so the real product name can drop in by editing
- * this one file. The product is officially "Untitled" for now - this is a deliberate,
- * neutral placeholder.
+ * brand copy. Import from here instead, so the product name lives in exactly one place.
  */
 
-/** Neutral placeholder product name. Replace here (and only here) when branding lands. */
-const APP_NAME = "Untitled";
+/** Product name. */
+const APP_NAME = "feelium";
 
 /** Short name used where space is tight (PWA home-screen label, headers). */
-const APP_SHORT_NAME = "Untitled";
+const APP_SHORT_NAME = "feelium";
 
 /** One-line description of what the product does. */
 const APP_DESCRIPTION =
