@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Minus, Plus, X } from "lucide-react";
+import { Check } from "lucide-react";
 import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -9,7 +9,7 @@ import {
   setBehaviorBooleanAction,
   setBehaviorNumericAction,
 } from "@/app/(app)/today/actions";
-import { Button } from "@/components/ui/button";
+import { NumericStepper } from "@/components/tracking/numeric-stepper";
 import { cn } from "@/lib/utils";
 
 type BehaviorForRow = {
@@ -179,53 +179,14 @@ function NumericControl({
     });
   }
 
-  const recorded = value !== null;
-  const display = recorded
-    ? `${value}${behavior.unit ? ` ${behavior.unit}` : ""}`
-    : "—";
-
   return (
-    <RowShell name={behavior.name} recorded={recorded}>
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="size-12"
-          aria-label={`Decrease ${behavior.name}`}
-          onClick={() => commit(value == null ? 0 : Math.max(0, value - 1))}
-        >
-          <Minus className="size-4" aria-hidden="true" />
-        </Button>
-        <span
-          className="min-w-20 flex-1 text-center text-lg font-semibold tabular-nums"
-          aria-label={`${behavior.name}: ${recorded ? display : "not recorded"}`}
-        >
-          {display}
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="size-12"
-          aria-label={`Increase ${behavior.name}`}
-          onClick={() => commit(value == null ? 1 : value + 1)}
-        >
-          <Plus className="size-4" aria-hidden="true" />
-        </Button>
-        {recorded ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-12"
-            aria-label={`Clear ${behavior.name}`}
-            onClick={() => commit(null)}
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
+    <RowShell name={behavior.name} recorded={value !== null}>
+      <NumericStepper
+        value={value}
+        onChange={commit}
+        unit={behavior.unit}
+        label={behavior.name}
+      />
     </RowShell>
   );
 }

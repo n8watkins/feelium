@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Minus, Plus, X } from "lucide-react";
+import { Check, Plus } from "lucide-react";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -8,11 +9,13 @@ import {
   createCheckInAction,
   updateCheckInAction,
 } from "@/app/(app)/checkin/actions";
+import { NumericStepper } from "@/components/tracking/numeric-stepper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { OutcomeInputType } from "@/db/schema";
+import { ratingAnchors } from "@/config/tracking";
+import type { OutcomeDirection, OutcomeInputType } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
 type OutcomeForForm = {
@@ -20,6 +23,7 @@ type OutcomeForForm = {
   name: string;
   inputType: OutcomeInputType;
   unit: string | null;
+  desiredDirection: OutcomeDirection | null;
 };
 type TagForForm = { id: string; name: string };
 type Answer = {
@@ -118,7 +122,7 @@ export function CheckInForm({
         </h2>
         {outcomes.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No outcomes yet. Add some in Settings to record how you feel.
+            No outcomes yet - add one to record how you feel.
           </p>
         ) : (
           <ul className="space-y-4">
@@ -134,9 +138,22 @@ export function CheckInForm({
             ))}
           </ul>
         )}
-        <p className="text-xs text-muted-foreground">
-          Leave anything blank - unanswered outcomes stay unknown.
-        </p>
+        {outcomes.length > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Leave anything blank - unanswered outcomes stay unknown.
+          </p>
+        ) : null}
+        {/* Mirror the inline "add a tag" affordance: add a new outcome and come back here. */}
+        <Button asChild variant="outline" className="w-full">
+          <Link
+            href={`/settings/outcomes/new?from=${encodeURIComponent(
+              checkInId ? `/checkin/${checkInId}` : "/checkin/new",
+            )}`}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Add outcome
+          </Link>
+        </Button>
       </section>
 
       <section className="space-y-3" aria-labelledby="tags-heading">
@@ -211,24 +228,35 @@ function OutcomeControl({
   onChange: (next: Partial<Answer>) => void;
 }) {
   if (outcome.inputType === "rating") {
+    const anchors = ratingAnchors(outcome.desiredDirection);
     return (
-      <div role="group" aria-label={outcome.name} className="flex gap-2">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            aria-pressed={answer.rating === n}
-            onClick={() => onChange({ rating: answer.rating === n ? null : n })}
-            className={cn(
-              "flex h-12 flex-1 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors",
-              answer.rating === n
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background hover:bg-accent",
-            )}
-          >
-            {n}
-          </button>
-        ))}
+      <div className="space-y-1.5">
+        <div role="group" aria-label={outcome.name} className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={answer.rating === n}
+              onClick={() => onChange({ rating: answer.rating === n ? null : n })}
+              className={cn(
+                "flex h-12 flex-1 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors",
+                answer.rating === n
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background hover:bg-accent",
+              )}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        {/* Anchor the bare 1-5 with meaning and (when set) the desired direction. */}
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>1 · {anchors.low}</span>
+          {anchors.hint ? (
+            <span className="font-medium text-foreground/70">{anchors.hint}</span>
+          ) : null}
+          <span>{anchors.high} · 5</span>
+        </div>
       </div>
     );
   }
@@ -265,58 +293,13 @@ function OutcomeControl({
   }
 
   // numeric
-  const recorded = answer.numeric !== null;
-  const display = recorded
-    ? `${answer.numeric}${outcome.unit ? ` ${outcome.unit}` : ""}`
-    : "—";
   return (
-    <div className="flex items-center gap-3">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="size-12"
-        aria-label={`Decrease ${outcome.name}`}
-        onClick={() =>
-          onChange({
-            numeric:
-              answer.numeric == null ? 0 : Math.max(0, answer.numeric - 1),
-          })
-        }
-      >
-        <Minus className="size-4" aria-hidden="true" />
-      </Button>
-      <span
-        className="min-w-20 flex-1 text-center text-lg font-semibold tabular-nums"
-        aria-label={`${outcome.name}: ${recorded ? display : "not recorded"}`}
-      >
-        {display}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="size-12"
-        aria-label={`Increase ${outcome.name}`}
-        onClick={() =>
-          onChange({ numeric: answer.numeric == null ? 1 : answer.numeric + 1 })
-        }
-      >
-        <Plus className="size-4" aria-hidden="true" />
-      </Button>
-      {recorded ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-12"
-          aria-label={`Clear ${outcome.name}`}
-          onClick={() => onChange({ numeric: null })}
-        >
-          <X className="size-4" aria-hidden="true" />
-        </Button>
-      ) : null}
-    </div>
+    <NumericStepper
+      value={answer.numeric}
+      onChange={(next) => onChange({ numeric: next })}
+      unit={outcome.unit}
+      label={outcome.name}
+    />
   );
 }
 

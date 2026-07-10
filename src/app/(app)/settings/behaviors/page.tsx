@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { ArchiveButton } from "@/components/tracking/archive-button";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,12 +104,11 @@ export default async function BehaviorsPage() {
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/settings/behaviors/${behavior.id}`}>Edit</Link>
                   </Button>
-                  <form action={archiveBehaviorAction}>
-                    <input type="hidden" name="id" value={behavior.id} />
-                    <Button type="submit" variant="ghost" size="sm">
-                      Archive
-                    </Button>
-                  </form>
+                  <ArchiveButton
+                    id={behavior.id}
+                    name={behavior.name}
+                    action={archiveBehaviorAction}
+                  />
                 </div>
               </li>
             ))}
