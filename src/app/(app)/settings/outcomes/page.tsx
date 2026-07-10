@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Plus, SmilePlus } from "lucide-react";
 import Link from "next/link";
 
+import { ArchiveButton } from "@/components/tracking/archive-button";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -101,12 +102,11 @@ export default async function OutcomesPage() {
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/settings/outcomes/${outcome.id}`}>Edit</Link>
                   </Button>
-                  <form action={archiveOutcomeAction}>
-                    <input type="hidden" name="id" value={outcome.id} />
-                    <Button type="submit" variant="ghost" size="sm">
-                      Archive
-                    </Button>
-                  </form>
+                  <ArchiveButton
+                    id={outcome.id}
+                    name={outcome.name}
+                    action={archiveOutcomeAction}
+                  />
                 </div>
               </li>
             ))}
