@@ -1,11 +1,22 @@
 import { CircleCheck, Plus, SmilePlus } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { countCheckInsForDate, listActiveBehaviors } from "@/server/data";
+import {
+  countCheckInsForDate,
+  getTrackingCounts,
+  listActiveBehaviors,
+} from "@/server/data";
 
 export default async function TodayPage() {
+  // First-run: a blank account is sent to onboarding rather than an empty system (PRD 11.2).
+  const counts = await getTrackingCounts();
+  if (counts.behaviors === 0 && counts.outcomes === 0) {
+    redirect("/onboarding");
+  }
+
   const now = new Date();
   const heading = now.toLocaleDateString(undefined, {
     weekday: "long",

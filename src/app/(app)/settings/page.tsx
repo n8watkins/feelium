@@ -1,4 +1,13 @@
-import { Bell, Database, ListChecks } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  CircleCheck,
+  Database,
+  SmilePlus,
+  Tag,
+} from "lucide-react";
+import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 
 import { auth } from "@/auth";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -22,6 +31,17 @@ const WEEKDAYS = [
   "Thursday",
   "Friday",
   "Saturday",
+];
+
+const TRACKING_LINKS: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  description: string;
+}[] = [
+  { href: "/settings/behaviors", icon: CircleCheck, label: "Behaviors", description: "What you do" },
+  { href: "/settings/outcomes", icon: SmilePlus, label: "Outcomes", description: "How you feel" },
+  { href: "/settings/tags", icon: Tag, label: "Tags", description: "Context labels" },
 ];
 
 export default async function SettingsPage() {
@@ -72,16 +92,39 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="size-5 text-muted-foreground" aria-hidden="true" />
-              Tracking
-            </CardTitle>
+            <CardTitle>Tracking</CardTitle>
             <CardDescription>
-              Manage behaviors, outcomes, and tags. Available in the tracking-setup phase.
+              Manage what you track. Reorder items within each list.
             </CardDescription>
           </CardHeader>
+          <CardContent className="p-0">
+            <nav>
+              {TRACKING_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+                >
+                  <link.icon
+                    className="size-5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium">{link.label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {link.description}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </Link>
+              ))}
+            </nav>
+          </CardContent>
         </Card>
 
         <Card>
