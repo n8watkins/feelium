@@ -27,17 +27,26 @@ export type BrandIcon = {
 
 /**
  * Icon references live here so swapping artwork is a one-file change. The Phase 1
- * foundation ships a single scalable SVG mark; rasterized PNG sizes and an
- * apple-touch-icon are a Phase 6 (PWA polish) follow-up.
+ * foundation shipped a single scalable SVG mark; Phase 6 (PWA) added the rasterized
+ * PNG sizes and maskable variant. The PNGs are derived from the SVG by
+ * `node scripts/generate-pwa-icons.mjs`; the iOS apple-touch icon lives at
+ * src/app/apple-icon.png (Next file convention).
  */
 const ICONS = {
   svg: "/icon.svg",
   favicon: "/favicon.ico",
+  png192: "/icon-192.png",
+  png512: "/icon-512.png",
+  maskable512: "/icon-maskable-512.png",
 } as const;
 
 const MANIFEST_ICONS: BrandIcon[] = [
+  // Scalable SVG first for browsers that honor it; raster PNGs guarantee installability
+  // (Chromium favors a concrete 192/512) and a dedicated maskable icon for Android masks.
   { src: ICONS.svg, sizes: "any", type: "image/svg+xml", purpose: "any" },
-  { src: ICONS.svg, sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+  { src: ICONS.png192, sizes: "192x192", type: "image/png", purpose: "any" },
+  { src: ICONS.png512, sizes: "512x512", type: "image/png", purpose: "any" },
+  { src: ICONS.maskable512, sizes: "512x512", type: "image/png", purpose: "maskable" },
 ];
 
 export const branding = {
