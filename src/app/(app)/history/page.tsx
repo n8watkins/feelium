@@ -16,7 +16,7 @@ export default async function HistoryPage() {
     <>
       <PageHeader
         title="History"
-        description="Review previous days without pressure about missed ones."
+        description="Look back at any day you recorded. Days you skipped are just gaps in the data."
       />
       <div className="px-4 pb-6 pt-2 md:px-8">
         {days.length === 0 ? (
