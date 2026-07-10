@@ -1,10 +1,10 @@
-# Personal Behavior & Feeling Tracker
+# feelium
 
 A mobile-first Progressive Web App for connecting what you do with how you feel.
-The product name (feelium) lives behind a single config module - see [Branding](#branding-single-config-point).
+All brand-facing identity lives behind a single config module - see [Branding](#branding-single-config-point).
 
-This repository currently contains the **Phase 1 Foundation** (per `docs/PRD.md`): the Next.js app shell, authentication, the full database schema, app-layer authorization, and the base design system.
-It runs entirely locally - no Docker, no cloud services, and no external accounts.
+This repository implements the MVP per `docs/PRD.md`: foundation, tracking setup, daily tracking, and history are in place, with analytics and PWA/notifications in progress.
+Local development runs entirely offline (a plain SQLite file, magic links printed to the console); production deploys to Vercel with a cloud Turso database.
 
 > The stack deviates from the PRD's Supabase/Postgres/RLS recommendation. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) for the decision record.
 
