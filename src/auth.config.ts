@@ -16,6 +16,9 @@ const authConfig = {
     verifyRequest: "/login?sent=1",
   },
   session: { strategy: "jwt" },
+  // Production runs behind Vercel's proxy, so trust the forwarded host. Auth.js derives
+  // the base URL from AUTH_URL and, because that is https in production, automatically
+  // uses secure, host-prefixed session cookies. AUTH_SECRET must be set in production.
   trustHost: true,
   // Providers are added in `auth.ts` (they pull in the DB adapter and bcrypt).
   providers: [],
