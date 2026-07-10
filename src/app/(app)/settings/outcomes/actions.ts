@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { isOutcomeDirection, isOutcomeInputType } from "@/config/tracking";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
   archiveOutcomeMetric,
   createOutcomeMetric,
@@ -84,7 +85,13 @@ export async function createOutcomeAction(
 
   await createOutcomeMetric(parsed.input);
   revalidatePath(LIST_PATH);
-  redirect(LIST_PATH);
+  // Return to wherever this was launched from (e.g. a check-in), defaulting to the list.
+  const destination = safeRedirectPath(
+    String(formData.get("from") ?? ""),
+    LIST_PATH,
+  );
+  revalidatePath(destination);
+  redirect(destination);
 }
 
 export async function updateOutcomeAction(

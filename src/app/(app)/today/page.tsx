@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { BehaviorLogRow } from "@/components/tracking/behavior-log-row";
+import { SavedCheckInToast } from "@/components/tracking/saved-check-in-toast";
 import { Button } from "@/components/ui/button";
 import { formatOutcomeValue } from "@/config/tracking";
 import {
@@ -15,7 +16,12 @@ import {
   listActiveBehaviors,
 } from "@/server/data";
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkin?: string }>;
+}) {
+  const { checkin } = await searchParams;
   // First-run: a blank account is sent to onboarding rather than an empty system (PRD 11.2).
   const counts = await getTrackingCounts();
   if (counts.behaviors === 0 && counts.outcomes === 0) {
@@ -39,6 +45,7 @@ export default async function TodayPage() {
 
   return (
     <>
+      {checkin === "saved" ? <SavedCheckInToast /> : null}
       <PageHeader title="Today" description={heading} />
       <div className="space-y-6 px-4 pt-2 md:px-8">
         <Button asChild size="lg" className="h-14 w-full text-base">
@@ -59,28 +66,44 @@ export default async function TodayPage() {
             <EmptyState
               icon={CircleCheck}
               title="No active behaviors"
-              description="Add behaviors in Settings to start recording what you do each day."
+              description="Add a behavior to start recording what you do each day."
+              action={
+                <Button asChild size="sm">
+                  <Link href="/settings/behaviors/new?from=/today">
+                    <Plus className="size-4" aria-hidden="true" />
+                    Add behavior
+                  </Link>
+                </Button>
+              }
             />
           ) : (
-            <ul className="space-y-2">
-              {behaviors.map((behavior) => {
-                const entry = entries.get(behavior.id);
-                return (
-                  <BehaviorLogRow
-                    key={behavior.id}
-                    behavior={{
-                      id: behavior.id,
-                      name: behavior.name,
-                      inputType: behavior.inputType,
-                      unit: behavior.unit,
-                    }}
-                    entryDate={localDate}
-                    booleanValue={entry?.booleanValue ?? null}
-                    numericValue={entry?.numericValue ?? null}
-                  />
-                );
-              })}
-            </ul>
+            <>
+              <ul className="space-y-2">
+                {behaviors.map((behavior) => {
+                  const entry = entries.get(behavior.id);
+                  return (
+                    <BehaviorLogRow
+                      key={behavior.id}
+                      behavior={{
+                        id: behavior.id,
+                        name: behavior.name,
+                        inputType: behavior.inputType,
+                        unit: behavior.unit,
+                      }}
+                      entryDate={localDate}
+                      booleanValue={entry?.booleanValue ?? null}
+                      numericValue={entry?.numericValue ?? null}
+                    />
+                  );
+                })}
+              </ul>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/settings/behaviors/new?from=/today">
+                  <Plus className="size-4" aria-hidden="true" />
+                  Add behavior
+                </Link>
+              </Button>
+            </>
           )}
         </section>
 

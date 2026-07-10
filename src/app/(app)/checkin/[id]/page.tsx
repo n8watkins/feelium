@@ -47,6 +47,7 @@ export default async function EditCheckInPage({
       name: o.name,
       inputType: o.inputType,
       unit: o.unit,
+      desiredDirection: o.desiredDirection,
     }));
 
   return (

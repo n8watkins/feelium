@@ -7,6 +7,7 @@ import {
   isBehaviorDirection,
   isBehaviorInputType,
 } from "@/config/tracking";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
   archiveBehavior,
   createBehavior,
@@ -88,7 +89,13 @@ export async function createBehaviorAction(
 
   await createBehavior(parsed.input);
   revalidatePath(LIST_PATH);
-  redirect(LIST_PATH);
+  // Return to wherever this was launched from (e.g. Today), defaulting to the list.
+  const destination = safeRedirectPath(
+    String(formData.get("from") ?? ""),
+    LIST_PATH,
+  );
+  revalidatePath(destination);
+  redirect(destination);
 }
 
 export async function updateBehaviorAction(

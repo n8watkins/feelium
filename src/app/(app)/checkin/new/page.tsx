@@ -31,6 +31,7 @@ export default async function NewCheckInPage() {
             name: o.name,
             inputType: o.inputType,
             unit: o.unit,
+            desiredDirection: o.desiredDirection,
           }))}
           tags={tags.map((t) => ({ id: t.id, name: t.name }))}
         />

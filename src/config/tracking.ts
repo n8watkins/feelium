@@ -74,6 +74,24 @@ export function outcomeDirectionLabel(value: OutcomeDirection | null): string {
   return OUTCOME_DIRECTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+/**
+ * Formats an amount with its unit, singularizing the unit when the amount is exactly 1 so
+ * we never render "1 cups". Units are stored however the user typed them (usually plural,
+ * e.g. "cups", "hours"); we only ever strip a trailing plural for an amount of 1 and never
+ * add one, so measure-style units like "kg" or "bpm" are left untouched.
+ */
+export function formatUnitAmount(amount: number, unit: string | null): string {
+  if (!unit) return `${amount}`;
+  return `${amount} ${amount === 1 ? singularizeUnit(unit) : unit}`;
+}
+
+function singularizeUnit(unit: string): string {
+  // Only the common regular-plural endings; anything else is left as-is.
+  if (/(ses|xes|zes|ches|shes)$/i.test(unit)) return unit.slice(0, -2); // glasses -> glass
+  if (/[^s]s$/i.test(unit)) return unit.slice(0, -1); // cups -> cup, hours -> hour
+  return unit; // kg, bpm, glass, already-singular, etc.
+}
+
 /** Formats a recorded outcome value for compact display (e.g. "3/5", "Yes", "5 hours"). */
 export function formatOutcomeValue(value: {
   inputType: OutcomeInputType;
@@ -89,9 +107,28 @@ export function formatOutcomeValue(value: {
     return value.boolean ? "Yes" : "No";
   }
   if (value.inputType === "numeric" && value.numeric != null) {
-    return `${value.numeric}${value.unit ? ` ${value.unit}` : ""}`;
+    return formatUnitAmount(value.numeric, value.unit);
   }
   return "—";
+}
+
+/**
+ * The end labels for a 1-5 rating control, so a bare 1-5 has meaning. When the outcome has
+ * a desired direction we label the ends by goodness (worse/better); otherwise by magnitude
+ * (Low/High). `hint` restates the direction for a caption.
+ */
+export function ratingAnchors(direction: OutcomeDirection | null): {
+  low: string;
+  high: string;
+  hint: string | null;
+} {
+  if (direction === "higher_is_better") {
+    return { low: "Worse", high: "Better", hint: "Higher is better" };
+  }
+  if (direction === "lower_is_better") {
+    return { low: "Better", high: "Worse", hint: "Lower is better" };
+  }
+  return { low: "Low", high: "High", hint: null };
 }
 
 /** Suggested starter set (PRD 11.2). Names are editable during onboarding. */

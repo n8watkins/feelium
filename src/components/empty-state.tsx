@@ -1,19 +1,22 @@
 import { type LucideIcon } from "lucide-react";
+import { type ReactNode } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
 /**
- * Friendly, non-judgmental empty state (PRD 8.5). Used by placeholder screens until the
- * feature phases fill them in.
+ * Friendly, non-judgmental empty state (PRD 8.5). An optional `action` renders a CTA (e.g.
+ * a deep link to the relevant "add" form) below the description.
  */
 export function EmptyState({
   icon: Icon,
   title,
   description,
+  action,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
+  action?: ReactNode;
 }) {
   return (
     <Card className="border-dashed">
@@ -27,6 +30,7 @@ export function EmptyState({
             {description}
           </p>
         </div>
+        {action ? <div className="pt-1">{action}</div> : null}
       </CardContent>
     </Card>
   );

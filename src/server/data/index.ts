@@ -13,6 +13,7 @@ export * from "./tags";
 export * from "./entries";
 export * from "./checkins";
 export * from "./history";
+export * from "./analytics";
 export * from "./starter";
 export * from "./notifications";
 export { InputTypeLockedError } from "./errors";
