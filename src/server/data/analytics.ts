@@ -82,11 +82,25 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
 
   const behaviorMeta: BehaviorMeta[] = [...behaviorRows]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ sortOrder: _sortOrder, ...meta }) => meta);
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      inputType: r.inputType,
+      desiredDirection: r.desiredDirection,
+      unit: r.unit,
+      isActive: r.isActive,
+    }));
 
   const outcomeMeta: OutcomeMeta[] = [...outcomeRows]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ sortOrder: _sortOrder, ...meta }) => meta);
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      inputType: r.inputType,
+      desiredDirection: r.desiredDirection,
+      unit: r.unit,
+      isActive: r.isActive,
+    }));
 
   const entries: BehaviorEntryRow[] = entryRows.map((r) => ({
     behaviorId: r.behaviorId,
