@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 
 import {
   deleteMyPushSubscription,
-  getReminderSettings,
   listMyPushSubscriptions,
   savePushSubscription,
   upsertReminderSettings,
@@ -111,9 +110,4 @@ export async function sendTestNotificationAction(): Promise<TestSendResult> {
     return { ok: false, error: "Could not deliver to any device. Try turning reminders off and on." };
   }
   return { ok: true, sent };
-}
-
-/** Re-reads the saved reminder settings (used after saving to refresh the UI). */
-export async function getReminderSettingsAction(): Promise<ReminderSettings> {
-  return getReminderSettings();
 }

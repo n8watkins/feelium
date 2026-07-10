@@ -127,16 +127,35 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="size-5 text-muted-foreground" aria-hidden="true" />
               Notifications
             </CardTitle>
             <CardDescription>
-              One optional daily reminder. Available in the notifications phase.
+              One optional daily reminder to check in.
             </CardDescription>
           </CardHeader>
+          <CardContent className="p-0">
+            <nav>
+              <Link
+                href="/settings/notifications"
+                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent"
+              >
+                <span className="flex-1">
+                  <span className="block text-sm font-medium">Daily reminder</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Enable, set a time, and view permission status
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </Link>
+            </nav>
+          </CardContent>
         </Card>
 
         <Card>
