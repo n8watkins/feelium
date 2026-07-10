@@ -44,7 +44,7 @@ export default async function InsightsPage({
     <>
       <PageHeader
         title="Insights"
-        description="Plain-language patterns based on your recorded data - never medical or causal claims."
+        description="Plain-language patterns based on your recorded data - describing what you tracked, not medical advice."
       />
       <div className="space-y-8 px-4 pb-6 pt-2 md:px-8">
         <RangeTabs active={range} />
