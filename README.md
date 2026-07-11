@@ -3,10 +3,15 @@
 A mobile-first Progressive Web App for connecting what you do with how you feel.
 All brand-facing identity lives behind a single config module - see [Branding](#branding-single-config-point).
 
-This repository implements the MVP per `docs/PRD.md`: foundation, tracking setup, daily tracking, and history are in place, with analytics and PWA/notifications in progress.
-Local development runs entirely offline (a plain SQLite file, magic links printed to the console); production deploys to Vercel with a cloud Turso database.
+This repository implements the **full MVP** per `docs/PRD.md` - all seven phases (foundation, tracking setup, daily tracking, history, analytics, PWA/notifications, and privacy/release polish) are shipped.
+It is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app); pushes to `main` auto-deploy via Vercel's Git integration.
+Local development runs entirely offline against a plain SQLite file; production runs on Vercel with a cloud Turso database.
+
+> **Sign-in is currently GitHub OAuth only.** The email magic-link and email/password providers are built and preserved but temporarily disabled (see [Signing in](#signing-in), [`src/auth.ts`](src/auth.ts), and [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002).
 
 > The stack deviates from the PRD's Supabase/Postgres/RLS recommendation. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) for the decision record.
+
+> New to the codebase? Start with [`docs/HANDOFF.md`](docs/HANDOFF.md) for a zero-context tour of what is built, how it is architected, and what to improve next.
 
 ## Stack
 
@@ -14,8 +19,9 @@ Local development runs entirely offline (a plain SQLite file, magic links printe
 - **Tailwind CSS v4** + **shadcn/ui** (Radix primitives, Lucide icons)
 - **next-themes** for light / dark / system theming
 - **Turso libSQL** (SQLite-compatible) with **Drizzle ORM** - local dev uses a plain SQLite file
-- **Auth.js / NextAuth v5** with the Drizzle adapter (magic link + optional password)
+- **Auth.js / NextAuth v5** with the Drizzle adapter (currently GitHub OAuth; magic link + password preserved but disabled)
 - **App-layer authorization**: all DB access is server-side and scoped to the session user
+- Deployed on **Vercel** (Git-connected auto-deploy) with a cloud **Turso** database
 
 ## Prerequisites
 
@@ -37,7 +43,8 @@ Local development runs entirely offline (a plain SQLite file, magic links printe
    ```
 
    `.env.local` needs a `DATABASE_URL` (the local SQLite file, already set to `file:./.data/local.db`) and an `AUTH_SECRET`.
-   There are no cloud URLs or real secrets.
+   Because sign-in is currently GitHub-only, you also need `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` from a GitHub OAuth app (callback URL `http://localhost:3000/api/auth/callback/github`) to actually log in - see [Signing in](#signing-in).
+   There are no other cloud URLs or real secrets required for local dev.
 
 3. Create and migrate the local database:
 
@@ -56,17 +63,16 @@ Local development runs entirely offline (a plain SQLite file, magic links printe
    Open [http://localhost:3000](http://localhost:3000).
    You will be redirected to `/login`.
 
-### Signing in locally
+### Signing in
 
-Email magic link is the default sign-in.
-In local development there is no email server - the sign-in link is **printed to the server console** (the terminal running `npm run dev`).
+**Sign-in is currently GitHub OAuth only.** On `/login` there is a single **Continue with GitHub** button.
 
-1. Enter any email on `/login` and choose **Email me a magic link**.
-2. Copy the URL printed in the `npm run dev` terminal (look for `Magic sign-in link for ...`) and open it in the browser.
+1. Create a GitHub OAuth app (<https://github.com/settings/developers>) with the callback URL `http://localhost:3000/api/auth/callback/github`, and put its client id/secret in `.env.local` as `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`.
+2. Click **Continue with GitHub** and authorize.
 3. The session is created and you land on `/today`.
    A profile row (with timezone and start of week) is created automatically on first sign-in.
 
-Optional email + password sign-in and sign-up are also available on the same screen; passwords are bcrypt-hashed in the database.
+> **Why GitHub-only?** Production only has the GitHub callback wired up, and Resend on the current plan can only email the account owner, so the magic-link flow was broken for everyone else. The email magic-link and email/password providers are fully built and **reversible** - the server actions remain in `src/app/login/actions.ts` and the providers are commented in `src/auth.ts` with a re-enable note. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002.
 
 ## Scripts
 
@@ -78,14 +84,21 @@ Optional email + password sign-in and sign-up are also available on the same scr
 | `npm run lint`       | ESLint                                              |
 | `npm run db:generate`| Generate SQL migrations from the Drizzle schema     |
 | `npm run db:migrate` | Apply migrations to the local SQLite file           |
+| `npm run db:seed`    | Seed local demo tracking data (see note below)      |
 | `npm run db:studio`  | Open Drizzle Studio to browse the local database    |
 | `npm run db:reset`   | Delete and recreate the local database from migrations |
+| `npm run test:persistence` | Integration test for Turso-safe check-in writes (`db.batch`) |
+
+> `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for local exploration. It also creates a `demo@example.com` password account, but that password login no longer works because the credentials provider is disabled (GitHub-only). The seeded tracking data is still useful for exercising History and Insights locally.
 
 ## Deployment (Vercel + Turso)
 
-The app is built to deploy on Vercel with a cloud [Turso](https://turso.tech) libSQL database, while local development is unchanged (a plain SQLite file, magic links printed to the console).
+The app is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app), running on Vercel with a cloud [Turso](https://turso.tech) libSQL database.
+Deploys are **Git-connected**: pushing to the `main` branch of the GitHub repo triggers an automatic Vercel build and deploy.
+Local development is unchanged (a plain SQLite file).
 
-Nothing in this repository provisions cloud resources - provisioning (the Turso database, the Vercel project, the GitHub OAuth app, and the Resend domain) is done separately.
+Nothing in this repository provisions cloud resources - provisioning (the Turso database, the Vercel project, and the GitHub OAuth app) is done separately.
+Production has no seeded/demo data; accounts are created by fresh GitHub sign-ins.
 
 ### Runtime and database
 
@@ -106,8 +119,8 @@ The same migration files in `drizzle/` apply to both local SQLite and cloud Turs
 
 ### OAuth and email in production
 
-- Add the production callback URL `https://<your-domain>/api/auth/callback/github` to the GitHub OAuth app (alongside the local one).
-- Resend requires a **verified sender domain**; set `AUTH_EMAIL_FROM` to an address on that domain. The default (`feelium <onboarding@resend.dev>`) is Resend's shared testing sender and only delivers to the Resend account owner.
+- Add the production callback URL `https://<your-domain>/api/auth/callback/github` to the GitHub OAuth app (alongside the local one). This is the only sign-in method currently enabled.
+- **Email magic link is currently disabled** and Resend is not required. If you re-enable the email provider (see [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002), Resend requires a **verified sender domain**; set `AUTH_EMAIL_FROM` to an address on that domain. The default (`feelium <onboarding@resend.dev>`) is Resend's shared testing sender and only delivers to the Resend account owner - which is exactly why magic-link was disabled.
 
 ### Production environment variables
 
@@ -120,12 +133,13 @@ Set these in the Vercel project (never commit real values).
 | `AUTH_URL`           | Yes      | No     | Canonical base URL, e.g. `https://feelium.example.com`. Drives callback URLs and secure cookies. |
 | `TURSO_DATABASE_URL` | Yes      | No     | Cloud Turso database URL (`libsql://…`). Takes precedence over `DATABASE_URL`.                 |
 | `TURSO_AUTH_TOKEN`   | Yes      | Yes    | Turso database auth token.                                                                     |
-| `AUTH_GITHUB_ID`     | Yes      | No     | GitHub OAuth app client ID (public).                                                           |
+| `AUTH_GITHUB_ID`     | Yes      | No     | GitHub OAuth app client ID (public). Required - GitHub is the only sign-in method.             |
 | `AUTH_GITHUB_SECRET` | Yes      | Yes    | GitHub OAuth app client secret.                                                               |
-| `AUTH_RESEND_KEY`    | Yes      | Yes    | Resend API key for sending magic-link emails.                                                  |
-| `AUTH_EMAIL_FROM`    | No       | No     | From address for magic-link emails (verified Resend domain). Defaults to `feelium <onboarding@resend.dev>`. |
+| `AUTH_RESEND_KEY`    | No       | Yes    | Resend API key for magic-link emails. Not needed while magic-link is disabled.                |
+| `AUTH_EMAIL_FROM`    | No       | No     | From address for magic-link emails (verified Resend domain). Only relevant if magic-link is re-enabled. Defaults to `feelium <onboarding@resend.dev>`. |
 
 `DATABASE_URL` is not used in production when the `TURSO_*` variables are set.
+Web Push notifications additionally need `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and `CRON_SECRET` - see [`docs/notifications-and-pwa.md`](docs/notifications-and-pwa.md).
 
 ## Project structure
 
@@ -134,8 +148,9 @@ src/
   app/
     (app)/                # Authenticated app shell (bottom nav + sidebar)
       today/ history/ insights/ settings/
-    api/auth/[...nextauth]/  # Auth.js route handlers
-    login/                # Sign-in (magic link default + optional password)
+    api/                  # Route handlers: auth, account export/signout, notifications/send
+    login/                # Sign-in (GitHub OAuth; magic-link/password UI disabled)
+    onboarding/           # First-run starter behaviors/outcomes
     layout.tsx            # Root layout: theme provider, fonts, metadata
     manifest.ts           # PWA manifest (reads from branding config)
   auth.ts                 # Auth.js config (adapter, providers, callbacks)
@@ -147,9 +162,13 @@ src/
     index.ts              # libSQL client + Drizzle instance
     schema/               # Drizzle schema (auth + app tables)
     migrate.ts            # Standalone migration runner
-  server/data.ts          # Central session-scoped data-access module
+    seed.ts               # Local demo-data seed (npm run db:seed)
+  server/
+    data/                 # Central session-scoped data-access module (import from "@/server/data")
+    push/                 # Web Push transport
   lib/                    # Nav config, redirect guard, utils
 drizzle/                  # Generated SQL migrations (committed)
+tests/                    # checkin-persistence.test.ts (Turso db.batch integration test)
 ```
 
 ## Branding (single config point)
@@ -164,7 +183,7 @@ The schema is defined in TypeScript with Drizzle (`src/db/schema`) and generated
 It follows PRD section 22, mapped to SQLite.
 
 - **App-layer authorization (no RLS).**
-  All data access goes through `src/server/data.ts`, which scopes every query by the authenticated session user id (`auth()`), never by a client-supplied id.
+  All data access goes through the `src/server/data/` module (import from `"@/server/data"`), which scopes every query by the authenticated session user id (`auth()`), never by a client-supplied id.
   Data access is server-side only, so a user can only ever read or write their own records.
 - **Unknown is never zero.**
   Boolean and numeric value columns are nullable and never default to `0`, so an explicit `0`/`No` stays distinct from "not recorded".
