@@ -82,12 +82,16 @@ Local development runs entirely offline against a plain SQLite file; production 
 | `npm run build`      | Production build                                    |
 | `npm run typecheck`  | TypeScript type checking (`tsc --noEmit`)           |
 | `npm run lint`       | ESLint                                              |
+| `npm test`           | Fast unit tests for dates, validation, and analytics |
 | `npm run db:generate`| Generate SQL migrations from the Drizzle schema     |
 | `npm run db:migrate` | Apply migrations to the local SQLite file           |
 | `npm run db:seed`    | Seed local demo tracking data (see note below)      |
 | `npm run db:studio`  | Open Drizzle Studio to browse the local database    |
 | `npm run db:reset`   | Delete and recreate the local database from migrations |
 | `npm run test:persistence` | Integration test for Turso-safe check-in writes (`db.batch`) |
+
+GitHub Actions runs install, lint, type checking, unit tests, and the production build for every pull request and push to `main`.
+The persistence test is intentionally separate because it requires `TEST_LIBSQL_URL` to point at a disposable libSQL or Turso database.
 
 > `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for local exploration. It also creates a `demo@example.com` password account, but that password login no longer works because the credentials provider is disabled (GitHub-only). The seeded tracking data is still useful for exercising History and Insights locally.
 

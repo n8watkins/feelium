@@ -8,8 +8,8 @@
  * check-in, its outcome values, and its tags actually land in the database.
  *
  * Run:  npm run test:persistence
- * It needs a libSQL server at TEST_LIBSQL_URL (default http://127.0.0.1:8080). Start one
- * with:  turso dev --port 8080          (or point TEST_LIBSQL_URL at any libSQL/Turso db)
+ * It needs an explicitly configured disposable libSQL server at TEST_LIBSQL_URL. Start one
+ * with: turso dev --port 8080, then set TEST_LIBSQL_URL=http://127.0.0.1:8080.
  */
 import { createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
@@ -31,11 +31,7 @@ const {
   checkInTags,
 } = schema;
 
-const url = process.env.TEST_LIBSQL_URL ?? "http://127.0.0.1:8080";
 const authToken = process.env.TEST_LIBSQL_AUTH_TOKEN;
-
-const client = createClient(authToken ? { url, authToken } : { url });
-const db = drizzle({ client, schema });
 
 let passed = 0;
 let failed = 0;
@@ -49,7 +45,9 @@ function assert(name: string, cond: boolean, detail = "") {
   }
 }
 
-async function main() {
+async function main(url: string) {
+  const client = createClient(authToken ? { url, authToken } : { url });
+  const db = drizzle({ client, schema });
   console.log(`Target: ${url} (libSQL over HTTP)\n`);
 
   // Ensure the schema is present (idempotent).
@@ -199,11 +197,13 @@ async function main() {
   if (failed > 0) process.exit(1);
 }
 
-main().catch((e) => {
-  console.error("\nTEST ERROR:", e instanceof Error ? e.message : e);
-  console.error(
-    "\nIs a libSQL server running at",
-    url + "? Start one with:  turso dev --port 8080",
-  );
-  process.exit(1);
-});
+const url = process.env.TEST_LIBSQL_URL;
+if (!url) {
+  console.log("SKIP: Set TEST_LIBSQL_URL to run the libSQL transport persistence test.");
+} else {
+  main(url).catch((e) => {
+    console.error("\nTEST ERROR:", e instanceof Error ? e.message : e);
+    console.error("\nCould not use the disposable libSQL target at", url);
+    process.exit(1);
+  });
+}
