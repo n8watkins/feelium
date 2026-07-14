@@ -10,6 +10,8 @@ import {
   type StarterOutcome,
 } from "@/config/tracking";
 import { createStarterItems, getTrackingCounts } from "@/server/data";
+import { updateProfileTimeZone } from "@/server/data";
+import { isValidTimeZone } from "@/lib/date";
 
 export type OnboardingState = { error?: string };
 
@@ -19,10 +21,12 @@ async function alreadySetUp(): Promise<boolean> {
 }
 
 /** Path 1: accept the suggested set as-is. */
-export async function useSuggestedSetupAction() {
+export async function useSuggestedSetupAction(formData: FormData) {
   if (!(await alreadySetUp())) {
     await createStarterItems(STARTER_BEHAVIORS, STARTER_OUTCOMES);
   }
+  const timezone = String(formData.get("timezone") ?? "");
+  if (isValidTimeZone(timezone)) await updateProfileTimeZone(timezone);
   revalidatePath("/today");
   redirect("/today");
 }
@@ -35,6 +39,8 @@ export async function completeCustomSetupAction(
   if (await alreadySetUp()) {
     redirect("/today");
   }
+
+  const timezone = String(formData.get("timezone") ?? "");
 
   const behaviors: StarterBehavior[] = [];
   STARTER_BEHAVIORS.forEach((behavior, index) => {
@@ -60,6 +66,7 @@ export async function completeCustomSetupAction(
   }
 
   await createStarterItems(behaviors, outcomes);
+  if (isValidTimeZone(timezone)) await updateProfileTimeZone(timezone);
   revalidatePath("/today");
   redirect("/today");
 }

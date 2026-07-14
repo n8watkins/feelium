@@ -9,9 +9,15 @@ import { DeleteCheckInButton } from "@/components/tracking/delete-check-in-butto
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatOutcomeValue } from "@/config/tracking";
-import { formatDayFull, formatTime, relativeDayLabel } from "@/lib/date";
+import {
+  DEFAULT_TIME_ZONE,
+  formatDayFull,
+  formatTime,
+  relativeDayLabel,
+} from "@/lib/date";
 import {
   getDayDetail,
+  getCurrentProfile,
   type DayBehavior,
   type DayCheckIn,
 } from "@/server/data";
@@ -35,8 +41,9 @@ export default async function DayDetailPage({
   const { date } = await params;
   if (!ISO_DATE.test(date)) notFound();
 
-  const detail = await getDayDetail(date);
-  const relative = relativeDayLabel(date);
+  const [detail, profile] = await Promise.all([getDayDetail(date), getCurrentProfile()]);
+  const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
+  const relative = relativeDayLabel(date, timeZone);
   const hasAnyData =
     detail.checkIns.length > 0 ||
     detail.archivedBehaviors.length > 0 ||
@@ -114,7 +121,7 @@ export default async function DayDetailPage({
             <ul className="space-y-3">
               {detail.checkIns.map((checkIn) => (
                 <li key={checkIn.id}>
-                  <CheckInCard checkIn={checkIn} date={date} />
+                  <CheckInCard checkIn={checkIn} date={date} timeZone={timeZone} />
                 </li>
               ))}
             </ul>
@@ -158,11 +165,13 @@ function ArchivedBehaviorRow({ item }: { item: DayBehavior }) {
 function CheckInCard({
   checkIn,
   date,
+  timeZone,
 }: {
   checkIn: DayCheckIn;
   date: string;
+  timeZone: string;
 }) {
-  const time = formatTime(checkIn.occurredAt);
+  const time = formatTime(checkIn.occurredAt, timeZone);
 
   return (
     <div className="rounded-lg border border-border p-4">

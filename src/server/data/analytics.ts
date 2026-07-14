@@ -21,6 +21,7 @@ import {
   type TimeRange,
 } from "@/lib/analytics";
 import { requireUserId } from "./session";
+import { getCurrentProfile } from "./profile";
 
 /**
  * Loads everything the Insights tab needs for one time range (PRD 16) and hands it to the
@@ -31,6 +32,7 @@ import { requireUserId } from "./session";
  */
 export async function getInsights(range: TimeRange): Promise<InsightsData> {
   const userId = await requireUserId();
+  const profile = await getCurrentProfile();
 
   const [behaviorRows, outcomeRows, entryRows, valueRows] = await Promise.all([
     db
@@ -120,7 +122,7 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
 
   return computeInsights({
     range,
-    today: todayISO(),
+    today: todayISO(profile?.timezone),
     behaviors: behaviorMeta,
     outcomes: outcomeMeta,
     entries,

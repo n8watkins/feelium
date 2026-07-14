@@ -27,6 +27,13 @@ export function OnboardingSetup() {
     {},
   );
 
+  function captureTimezone(event: React.FormEvent<HTMLFormElement>) {
+    const field = event.currentTarget.elements.namedItem("timezone");
+    if (field instanceof HTMLInputElement) {
+      field.value = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    }
+  }
+
   if (mode === "choose") {
     return (
       <div className="space-y-4">
@@ -39,7 +46,8 @@ export function OnboardingSetup() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <form action={useSuggestedSetupAction}>
+            <form action={useSuggestedSetupAction} onSubmit={captureTimezone}>
+              <input type="hidden" name="timezone" defaultValue="UTC" />
               <Button type="submit">Use these</Button>
             </form>
           </CardFooter>
@@ -77,7 +85,8 @@ export function OnboardingSetup() {
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} onSubmit={captureTimezone} className="space-y-6">
+      <input type="hidden" name="timezone" defaultValue="UTC" />
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Behaviors</legend>
         <ul className="space-y-2">

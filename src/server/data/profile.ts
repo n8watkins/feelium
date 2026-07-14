@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { profiles, users } from "@/db/schema";
+import { isValidTimeZone } from "@/lib/date";
 import { StaleSessionError } from "./errors";
 import { requireUserId } from "./session";
 
@@ -39,4 +40,39 @@ export async function getCurrentProfile() {
     .where(eq(profiles.userId, userId))
     .limit(1);
   return profile ?? null;
+}
+
+export type ProfilePreferences = {
+  timezone: string;
+  weekStartsOn: number;
+};
+
+/** Updates the current user's calendar preferences after validating their ranges. */
+export async function updateProfilePreferences(
+  input: ProfilePreferences,
+): Promise<void> {
+  if (!isValidTimeZone(input.timezone)) throw new Error("INVALID_TIMEZONE");
+  if (!Number.isInteger(input.weekStartsOn) || input.weekStartsOn < 0 || input.weekStartsOn > 6) {
+    throw new Error("INVALID_WEEK_START");
+  }
+
+  const userId = await requireUserId();
+  await db
+    .update(profiles)
+    .set({
+      timezone: input.timezone,
+      weekStartsOn: input.weekStartsOn,
+      updatedAt: new Date(),
+    })
+    .where(eq(profiles.userId, userId));
+}
+
+/** Updates only the timezone detected by the signed-in user's browser. */
+export async function updateProfileTimeZone(timezone: string): Promise<void> {
+  if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
+  const userId = await requireUserId();
+  await db
+    .update(profiles)
+    .set({ timezone, updatedAt: new Date() })
+    .where(eq(profiles.userId, userId));
 }

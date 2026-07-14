@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
-import { ensureProfile, StaleSessionError } from "@/server/data";
+import { TimezoneSync } from "@/components/timezone-sync";
+import { DEFAULT_TIME_ZONE } from "@/lib/date";
+import { ensureProfile, getCurrentProfile, StaleSessionError } from "@/server/data";
 
 /**
  * Layout for the authenticated app. Guards every child route with a server-side session
@@ -21,6 +23,8 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  const profile = await getCurrentProfile();
+
   try {
     await ensureProfile();
   } catch (error) {
@@ -34,6 +38,14 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-dvh">
+      <TimezoneSync
+        currentTimeZone={profile?.timezone ?? DEFAULT_TIME_ZONE}
+        shouldSync={Boolean(
+          profile &&
+            profile.timezone === DEFAULT_TIME_ZONE &&
+            profile.createdAt.getTime() === profile.updatedAt.getTime(),
+        )}
+      />
       <AppSidebar />
       <div className="flex min-h-dvh flex-1 flex-col">
         <main className="mx-auto w-full max-w-2xl flex-1 pb-24 md:pb-10">

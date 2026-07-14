@@ -4,13 +4,14 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { formatDayFull, relativeDayLabel } from "@/lib/date";
-import { listHistoryDays, type HistoryDay } from "@/server/data";
+import { DEFAULT_TIME_ZONE, formatDayFull, relativeDayLabel } from "@/lib/date";
+import { getCurrentProfile, listHistoryDays, type HistoryDay } from "@/server/data";
 
 export const metadata = { title: "History" };
 
 export default async function HistoryPage() {
-  const days = await listHistoryDays();
+  const [days, profile] = await Promise.all([listHistoryDays(), getCurrentProfile()]);
+  const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
 
   return (
     <>
@@ -29,7 +30,7 @@ export default async function HistoryPage() {
           <ul className="space-y-3">
             {days.map((day) => (
               <li key={day.date}>
-                <HistoryDayCard day={day} />
+                <HistoryDayCard day={day} timeZone={timeZone} />
               </li>
             ))}
           </ul>
@@ -54,8 +55,8 @@ function countsLine(day: HistoryDay): string {
   return parts.join(" · ");
 }
 
-function HistoryDayCard({ day }: { day: HistoryDay }) {
-  const relative = relativeDayLabel(day.date);
+function HistoryDayCard({ day, timeZone }: { day: HistoryDay; timeZone: string }) {
+  const relative = relativeDayLabel(day.date, timeZone);
 
   return (
     <Link
