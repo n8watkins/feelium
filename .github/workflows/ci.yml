@@ -33,5 +33,17 @@ jobs:
         run: npm run typecheck
       - name: Run unit tests
         run: npm test
+      - name: Test fresh and legacy database migrations
+        run: npm run test:migrations
+      - name: Install Turso CLI
+        run: |
+          archive="$RUNNER_TEMP/turso-cli.tar.gz"
+          curl --proto '=https' --tlsv1.2 -LsSf -o "$archive" https://github.com/tursodatabase/turso-cli/releases/download/v1.0.29/turso-cli_Linux_x86_64.tar.gz
+          echo "0eae140b030b11ad98540ed85ceb62575100135e51038009064e50675822c0f5  $archive" | sha256sum --check
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "$archive" -C "$HOME/.local/bin" turso
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Test persistence over the Turso HTTP transport
+        run: npm run test:persistence:local
       - name: Build
         run: npm run build

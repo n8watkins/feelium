@@ -14,7 +14,9 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "rm -f .data/local.db .data/local.db-shm .data/local.db-wal && drizzle-kit migrate",
-    "test:persistence": "tsx tests/checkin-persistence.test.ts"
+    "test:migrations": "tsx --test tests/migrations.integration.test.ts",
+    "test:persistence": "tsx tests/checkin-persistence.test.ts",
+    "test:persistence:local": "bash scripts/test-persistence-local.sh"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
