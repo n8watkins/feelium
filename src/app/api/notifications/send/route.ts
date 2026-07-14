@@ -19,11 +19,9 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
 /**
  * Scheduled reminder-send endpoint (PRD 17).
  *
- * PRODUCTION: a scheduled trigger (e.g. a Vercel Cron running every minute) calls this
- * endpoint. Vercel automatically attaches `Authorization: Bearer <CRON_SECRET>`; we
- * verify it against the CRON_SECRET env var. Nothing here builds cloud infra - it is just
- * the HTTP entry point a scheduler drives. Example vercel.json:
- *   { "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }] }
+ * PRODUCTION: the committed Vercel Cron schedule calls this endpoint every minute.
+ * Vercel automatically attaches `Authorization: Bearer <CRON_SECRET>`; we verify it
+ * against the CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
  *
  * For each user with the reminder enabled, if the resolved occurrence in their saved
  * timezone is within `window` minutes (default 10), we push the gentle daily reminder to

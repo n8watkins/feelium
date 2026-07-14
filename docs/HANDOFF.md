@@ -65,8 +65,8 @@ src/
     push/                   # Web Push transport (VAPID)
   lib/                      # Nav config, safe-redirect guard, utils
 drizzle/                    # Generated SQL migrations (committed)
-tests/                      # checkin-persistence.test.ts
-scripts/                    # generate-pwa-icons.mjs
+tests/                      # Unit and integration regression coverage
+scripts/                    # Local persistence test and PWA icon utilities
 ```
 
 ### The authorization model (important)
@@ -82,7 +82,7 @@ This is the deliberate replacement for the PRD's Postgres RLS. See `docs/DEVIATI
 
 ### Data-access submodules (`src/server/data/`)
 
-`profile`, `behaviors`, `outcomes`, `tags`, `entries`, `checkins`, `checkin-writes`, `history`, `analytics`, `starter`, `notifications`, `account`, `account-ops`, plus `session`/`errors` helpers.
+`profile`, `profile-operations`, `behaviors`, `outcomes`, `tags`, `entries`, `checkins`, `checkin-writes`, `history`, `analytics`, `starter`, `notifications`, `reminder-operations`, `account`, `account-ops`, plus `session`/`errors` helpers.
 The `*-operations.ts` modules are kept **session-free** on purpose so integration tests can exercise atomic data operations against a scratch libSQL/Turso target without the Next runtime.
 
 ### Auth flow
@@ -228,7 +228,7 @@ These are intentionally out of scope for the MVP and should only be built once t
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).
 - **Offline data entry is out of scope** for this MVP by design (PRD 18). The service worker caches assets, not HTML.
 - **Browser automation requires an auth setup.** Supply a disposable `AUTH_SECRET` and an authenticated test session before verifying protected routes.
-- **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, and validation; integration tests cover fresh and legacy migrations plus real Turso HTTP persistence.
+- **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, validation, and security headers; integration tests cover atomic data operations, fresh and legacy migrations, plus real Turso HTTP persistence.
 
 ---
 

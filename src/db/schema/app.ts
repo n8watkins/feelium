@@ -43,8 +43,8 @@ export type BehaviorDirection = "increase" | "reduce" | "neutral";
 export type OutcomeInputType = "rating" | "boolean" | "numeric";
 export type OutcomeDirection = "higher_is_better" | "lower_is_better" | "neutral";
 
-// profiles: one row per user, created app-side on first sign-in (replaces the old
-// Postgres trigger). week_starts_on: 0 = Sunday ... 6 = Saturday.
+// profiles: one row per user, created app-side on the first authenticated request
+// (replaces the old Postgres trigger). week_starts_on: 0 = Sunday ... 6 = Saturday.
 export const profiles = sqliteTable(
   "profile",
   {

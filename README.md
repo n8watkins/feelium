@@ -82,7 +82,7 @@ Local development runs entirely offline against a plain SQLite file; production 
 | `npm run build`      | Production build                                    |
 | `npm run typecheck`  | TypeScript type checking (`tsc --noEmit`)           |
 | `npm run lint`       | ESLint                                              |
-| `npm test`           | Fast unit tests for dates, validation, and analytics |
+| `npm test`           | Run the fast unit-test suite                         |
 | `npm run db:generate`| Generate SQL migrations from the Drizzle schema     |
 | `npm run db:migrate` | Apply migrations to the local SQLite file           |
 | `npm run db:seed`    | Seed local demo tracking data (see note below)      |

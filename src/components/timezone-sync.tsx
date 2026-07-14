@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { syncTimeZoneAction } from "@/app/(app)/settings/actions";
 
-/** Keeps the profile's calendar timezone aligned with the device currently using the app. */
+/** Initializes a new profile's timezone from the device exactly once. */
 export function TimezoneSync({
   currentTimeZone,
   shouldSync,
