@@ -53,6 +53,11 @@ export const profiles = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name"),
     timezone: text("timezone").notNull().default("UTC"),
+    // Existing profiles default to manual control during migration. Newly created profiles
+    // opt in explicitly, until the user saves a timezone preference themselves.
+    autoSyncTimezone: integer("auto_sync_timezone", { mode: "boolean" })
+      .notNull()
+      .default(false),
     weekStartsOn: integer("week_starts_on").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

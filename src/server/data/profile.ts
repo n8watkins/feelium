@@ -29,7 +29,10 @@ export async function ensureProfile(): Promise<void> {
     throw new StaleSessionError();
   }
 
-  await db.insert(profiles).values({ userId }).onConflictDoNothing();
+  await db
+    .insert(profiles)
+    .values({ userId, autoSyncTimezone: true })
+    .onConflictDoNothing();
 }
 
 export async function getCurrentProfile() {
@@ -61,6 +64,7 @@ export async function updateProfilePreferences(
     .update(profiles)
     .set({
       timezone: input.timezone,
+      autoSyncTimezone: false,
       weekStartsOn: input.weekStartsOn,
       updatedAt: new Date(),
     })
@@ -73,6 +77,6 @@ export async function updateProfileTimeZone(timezone: string): Promise<void> {
   const userId = await requireUserId();
   await db
     .update(profiles)
-    .set({ timezone, updatedAt: new Date() })
+    .set({ timezone, autoSyncTimezone: false, updatedAt: new Date() })
     .where(eq(profiles.userId, userId));
 }

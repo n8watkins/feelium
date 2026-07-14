@@ -1,0 +1,1 @@
+ALTER TABLE `profile` ADD `auto_sync_timezone` integer DEFAULT false NOT NULL;

@@ -44,6 +44,9 @@ test("migrations create a fresh database", async () => {
     const names = columns.rows.map((row) => row.name);
     assert.ok(names.includes("last_sent_local_date"));
     assert.ok(names.includes("next_reminder_at"));
+
+    const profileColumns = await client.execute("pragma table_info(profile)");
+    assert.ok(profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"));
   } finally {
     client.close();
     await rm(root, { recursive: true, force: true });
@@ -61,6 +64,9 @@ test("migrations preserve legacy rows that exceed current application limits", a
     await client.batch(
       [
         "insert into user (id, email) values ('legacy-user', 'legacy@example.test')",
+        `insert into profile
+          (user_id, timezone, week_starts_on, created_at, updated_at)
+          values ('legacy-user', 'America/New_York', 0, 1, 2)`,
         `insert into behavior
           (id, user_id, name, input_type, desired_direction, created_at, updated_at)
           values ('legacy-behavior', 'legacy-user', '${"x".repeat(101)}', 'numeric', 'neutral', 1, 1)`,
@@ -82,6 +88,10 @@ test("migrations preserve legacy rows that exceed current application limits", a
     );
     assert.equal(entry.rows[0]?.entry_date, "2026-02-30");
     assert.equal(Number(entry.rows[0]?.numeric_value), -1);
+    const profileDefault = await client.execute(
+      "select auto_sync_timezone from profile where user_id = 'legacy-user'",
+    );
+    assert.equal(Number(profileDefault.rows[0]?.auto_sync_timezone), 0);
     assert.equal((await client.execute("pragma foreign_key_check")).rows.length, 0);
   } finally {
     client.close();

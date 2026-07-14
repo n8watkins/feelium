@@ -40,11 +40,7 @@ export default async function AppLayout({
     <div className="flex min-h-dvh">
       <TimezoneSync
         currentTimeZone={profile?.timezone ?? DEFAULT_TIME_ZONE}
-        shouldSync={Boolean(
-          profile &&
-            profile.timezone === DEFAULT_TIME_ZONE &&
-            profile.createdAt.getTime() === profile.updatedAt.getTime(),
-        )}
+        shouldSync={profile?.autoSyncTimezone ?? false}
       />
       <AppSidebar />
       <div className="flex min-h-dvh flex-1 flex-col">
