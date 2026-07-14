@@ -43,6 +43,7 @@ const REMINDER_URL = "/checkin/new";
 const DEFAULT_WINDOW_MINUTES = 10;
 const MAX_CANDIDATES_PER_RUN = 100;
 const SEND_CONCURRENCY = 10;
+const SUBSCRIPTION_CONCURRENCY_PER_USER = 25;
 
 /** Current wall-clock "HH:MM" in the given IANA timezone, or null if the tz is invalid. */
 function currentHHMM(timezone: string, now: Date): string | null {
@@ -163,22 +164,37 @@ async function handle(request: NextRequest) {
       claimedUsers += 1;
 
       const subscriptions = await listPushSubscriptionsForUser(reminder.userId);
-      for (const subscription of subscriptions) {
-        const result = await sendPush(
-          subscription.subscriptionData as unknown as WebPushSubscription,
-          {
-            title: REMINDER_TITLE,
-            body: REMINDER_BODY,
-            url: REMINDER_URL,
-          },
+      for (
+        let offset = 0;
+        offset < subscriptions.length;
+        offset += SUBSCRIPTION_CONCURRENCY_PER_USER
+      ) {
+        const batch = subscriptions.slice(
+          offset,
+          offset + SUBSCRIPTION_CONCURRENCY_PER_USER,
         );
-        if (result.ok) {
-          userSent += 1;
-        } else if (result.gone) {
-          await deletePushSubscriptionByEndpoint(subscription.endpoint);
-          userPruned += 1;
-        } else {
-          userFailed += 1;
+        const results = await Promise.all(
+          batch.map(async (subscription) => ({
+            subscription,
+            result: await sendPush(
+              subscription.subscriptionData as unknown as WebPushSubscription,
+              {
+                title: REMINDER_TITLE,
+                body: REMINDER_BODY,
+                url: REMINDER_URL,
+              },
+            ),
+          })),
+        );
+        for (const { subscription, result } of results) {
+          if (result.ok) {
+            userSent += 1;
+          } else if (result.gone) {
+            await deletePushSubscriptionByEndpoint(subscription.endpoint);
+            userPruned += 1;
+          } else {
+            userFailed += 1;
+          }
         }
       }
     } catch {
