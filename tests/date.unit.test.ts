@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addDaysISO, dateISOInTimeZone, isValidTimeZone, parseISODate } from "@/lib/date";
+import {
+  addDaysISO,
+  dateISOInTimeZone,
+  isValidTimeZone,
+  parseISODate,
+  startOfWeekISO,
+} from "@/lib/date";
 
 test("formats one instant as the correct local calendar date", () => {
   const instant = new Date("2026-07-14T06:30:00.000Z");
@@ -19,4 +25,11 @@ test("adds calendar days safely across leap days and DST boundaries", () => {
 test("recognizes valid IANA timezones", () => {
   assert.equal(isValidTimeZone("America/Los_Angeles"), true);
   assert.equal(isValidTimeZone("Not/A_Timezone"), false);
+});
+
+test("finds week boundaries using the user's chosen first day", () => {
+  assert.equal(startOfWeekISO("2026-07-14", 1), "2026-07-13");
+  assert.equal(startOfWeekISO("2026-07-14", 0), "2026-07-12");
+  assert.equal(startOfWeekISO("2026-01-01", 6), "2025-12-27");
+  assert.throws(() => startOfWeekISO("2026-07-14", 7), RangeError);
 });

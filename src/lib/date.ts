@@ -51,6 +51,15 @@ export function addDaysISO(date: string, delta: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/** The ISO date that begins the containing week. 0 = Sunday ... 6 = Saturday. */
+export function startOfWeekISO(date: string, weekStartsOn: number): string {
+  if (!Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
+    throw new RangeError("weekStartsOn must be an integer from 0 through 6");
+  }
+  const weekday = parseISODate(date).getUTCDay();
+  return addDaysISO(date, -((weekday - weekStartsOn + 7) % 7));
+}
+
 /** Long, human date: "Wednesday, July 9, 2026". */
 export function formatDayFull(date: string): string {
   return parseISODate(date).toLocaleDateString(undefined, {

@@ -5,7 +5,12 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { DEFAULT_TIME_ZONE, formatDayFull, relativeDayLabel } from "@/lib/date";
+import {
+  DEFAULT_TIME_ZONE,
+  formatDayFull,
+  relativeDayLabel,
+  startOfWeekISO,
+} from "@/lib/date";
 import { isISODate } from "@/lib/validation";
 import { cn } from "@/lib/utils";
 import { getCurrentProfile, listHistoryDays, type HistoryDay } from "@/server/data";
@@ -22,6 +27,7 @@ export default async function HistoryPage({
   const [history, profile] = await Promise.all([listHistoryDays(before), getCurrentProfile()]);
   const { days, nextCursor } = history;
   const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
+  const weeks = groupByWeek(days, profile?.weekStartsOn ?? 1);
 
   return (
     <>
@@ -37,13 +43,25 @@ export default async function HistoryPage({
             description="Once you start recording, your days appear here in reverse chronological order - behaviors, check-ins, tags, and notes, all editable."
           />
         ) : (
-          <ul className="space-y-3">
-            {days.map((day) => (
-              <li key={day.date}>
-                <HistoryDayCard day={day} timeZone={timeZone} />
-              </li>
+          <div className="space-y-6">
+            {weeks.map((week) => (
+              <section key={week.start} aria-labelledby={`week-${week.start}`}>
+                <h2
+                  id={`week-${week.start}`}
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Week of {formatDayFull(week.start)}
+                </h2>
+                <ul className="space-y-3">
+                  {week.days.map((day) => (
+                    <li key={day.date}>
+                      <HistoryDayCard day={day} timeZone={timeZone} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
         {nextCursor ? (
           <div className="mt-6 flex justify-center">
@@ -58,6 +76,17 @@ export default async function HistoryPage({
       </div>
     </>
   );
+}
+
+function groupByWeek(days: HistoryDay[], weekStartsOn: number) {
+  const groups: Array<{ start: string; days: HistoryDay[] }> = [];
+  for (const day of days) {
+    const start = startOfWeekISO(day.date, weekStartsOn);
+    const current = groups.at(-1);
+    if (current?.start === start) current.days.push(day);
+    else groups.push({ start, days: [day] });
+  }
+  return groups;
 }
 
 function countsLine(day: HistoryDay): string {
