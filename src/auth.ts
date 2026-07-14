@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 
 import authConfig from "@/auth.config";
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 
 // ---------------------------------------------------------------------------
@@ -54,9 +54,9 @@ import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 //       },
 //     });
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
   ...authConfig,
-  adapter: DrizzleAdapter(db, {
+  adapter: DrizzleAdapter(getDb(), {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
@@ -102,4 +102,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     //   },
     // }),
   ],
-});
+}));

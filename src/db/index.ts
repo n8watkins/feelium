@@ -5,20 +5,53 @@ import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "./schema";
 
-// One env-driven libSQL client (module singleton: evaluated once per server process, never
-// per request). It works both locally and in the Vercel Node serverless runtime:
-//   - Production (cloud Turso): set TURSO_DATABASE_URL (libsql://...) and TURSO_AUTH_TOKEN.
-//   - Development (local file): DATABASE_URL as a `file:` url (default ./.data/local.db),
-//     resolved relative to the process cwd (repo root). No auth token.
-// The Turso cloud URL takes precedence when present so a deployed app never accidentally
-// falls back to an ephemeral local file.
-const url =
-  process.env.TURSO_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "file:./.data/local.db";
-const authToken = process.env.TURSO_AUTH_TOKEN;
+type Database = ReturnType<typeof createDatabase>;
 
-const config: Config = authToken ? { url, authToken } : { url };
-const client = createClient(config);
+function databaseConfig(): Config {
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
 
-export const db = drizzle({ client, schema });
+  if (tursoUrl || tursoAuthToken) {
+    if (!tursoUrl || !tursoAuthToken) {
+      throw new Error(
+        "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be configured together.",
+      );
+    }
+    return { url: tursoUrl, authToken: tursoAuthToken };
+  }
+
+  // A local SQLite fallback is convenient for development, but it would be ephemeral on
+  // Vercel and could appear to accept writes before silently losing them. Fail closed there.
+  if (process.env.VERCEL === "1" || process.env.VERCEL_ENV) {
+    throw new Error(
+      "Turso is required on Vercel. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.",
+    );
+  }
+
+  return { url: process.env.DATABASE_URL ?? "file:./.data/local.db" };
+}
+
+function createDatabase() {
+  const client = createClient(databaseConfig());
+  return drizzle({ client, schema });
+}
+
+let database: Database | null = null;
+
+/** Lazily creates the database client on first use, never while a module is imported. */
+export function getDb(): Database {
+  database ??= createDatabase();
+  return database;
+}
+
+/**
+ * Backward-compatible lazy database handle. Property access resolves the singleton only when
+ * a query actually runs, so Auth.js and Server Component imports stay build-safe.
+ */
+export const db = new Proxy({} as Database, {
+  get(_target, property) {
+    const target = getDb();
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  },
+});
