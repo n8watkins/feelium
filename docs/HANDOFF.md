@@ -98,14 +98,14 @@ Auth tables (adapter): `user` (includes a `passwordHash` column for the disabled
 
 Product tables:
 
-- `profile` - one per user: display name, timezone, week-starts-on.
+- `profile` - one per user: display name, timezone, one-time device-timezone sync state, and week-starts-on.
 - `behavior` - boolean or numeric; desired direction (increase/reduce/neutral); optional unit and custom prompt; sort order; archive flag.
 - `daily_behavior_entry` - one per behavior per day (unique); boolean and numeric values both nullable.
 - `outcome_metric` - rating (1-5), boolean, or numeric; optional desired direction; sort order; archive flag.
 - `check_in` - a point-in-time entry (local date + timestamp + note).
 - `check_in_value` - one per outcome metric per check-in (unique); rating/boolean/numeric all nullable.
 - `tag` and `check_in_tag` - free-form tags (unique name per user) linked many-to-many to check-ins.
-- `reminder_setting` - one optional daily reminder per user (enabled, time, timezone).
+- `reminder_setting` - one optional daily reminder per user, including its next UTC occurrence and most recently claimed local date.
 - `push_subscription` - Web Push subscriptions per user/endpoint.
 
 ---
@@ -120,7 +120,7 @@ Full setup is in `README.md`; the short version:
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
-Useful scripts: `dev`, `build`, `typecheck`, `lint`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, `db:reset`, `test:persistence`.
+Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
 
 ---
 
@@ -154,6 +154,7 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `db:generate`, `db:migrate`
 ### History
 
 - Reverse-chronological list of days that have data, each summarizing behaviors, check-ins, outcome averages, tags, and a note preview.
+- Days are grouped under week headings that honor the profile's chosen start of week.
 - Day detail view: per-behavior state (with inline logging for active behaviors on past dates), all check-ins for the day, each editable and deletable.
 - Archived behaviors/metrics still render their historical data, badged "Archived".
 
@@ -173,13 +174,15 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `db:generate`, `db:migrate`
 - **Notifications:** enable a single daily reminder (time + timezone), manage Web Push permission and subscriptions, and send a test push.
 - **Data:** export everything as JSON, delete all tracking data (keeps the account), or delete the account entirely.
 - **Privacy:** a static explainer page.
-- **Preferences:** theme (light/dark/system); timezone and week-start are shown read-only.
+- **Preferences:** theme (light/dark/system), timezone, and start of week are editable.
 
 ### Notifications / PWA
 
 - Installable PWA (manifest from `config/branding.ts`, standalone display, raster + maskable + apple-touch icons).
 - Service worker (`public/sw.js`): stale-while-revalidate for static assets, HTML never cached (auth pages stay fresh), Web Push handling, notification deep-link to the check-in screen.
-- A guarded send endpoint (`/api/notifications/send`) that a per-minute cron drives; it matches each user's reminder time in their own timezone and prunes dead subscriptions. Full detail in `docs/notifications-and-pwa.md`.
+- A guarded send endpoint (`/api/notifications/send`) that a per-minute cron drives.
+  It queries a bounded due queue, uses timezone-aware and daylight-saving-safe occurrences, retries transient failures fairly, bounds stalled push requests, and prunes dead subscriptions.
+  Full detail is in `docs/notifications-and-pwa.md`.
 
 ### Account / privacy
 
@@ -222,11 +225,10 @@ These are intentionally out of scope for the MVP and should only be built once t
 - **Sign-in is GitHub-only.** The seeded `demo@example.com` / password account no longer works because the credentials provider is disabled. Local dev now requires GitHub OAuth credentials to log in at all.
 - **Turso + serverless transactions (the P0 lesson).** An interactive `db.transaction()` does **not** reliably commit over Turso/libSQL HTTP in Vercel's serverless runtime: the connection is not sticky, so the `COMMIT` can be dropped and the whole write silently rolls back ("check-in saved but nothing persists"). The fix, and the rule going forward, is to use a single atomic `db.batch()` for multi-statement writes. See `src/server/data/checkin-writes.ts` and `tests/checkin-persistence.test.ts`.
 - **Production has no seed/demo data.** Turso in prod starts empty; every account is a fresh GitHub sign-in. `npm run db:seed` is local-only.
-- **Browser E2E on the dev box.** Chrome is unusable on the WSL development machine, so browser end-to-end testing fell back to authenticated HTTP fetches against a running server rather than a real headless browser. Keep this in mind when adding UI tests; see the memory notes on the Browserless/authenticated-fetch workaround.
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).
-- **Timezone and week-start are read-only in Settings.** The values exist on the profile and are used, but there is no edit UI yet (a small, well-scoped addition - see quick-wins).
 - **Offline data entry is out of scope** for this MVP by design (PRD 18). The service worker caches assets, not HTML.
-- **Test coverage is thin.** The only automated test is the check-in persistence integration test. `npm run typecheck` and `npm run lint` are the main safety nets; broaden coverage before large refactors.
+- **Browser automation requires an auth setup.** Supply a disposable `AUTH_SECRET` and an authenticated test session before verifying protected routes.
+- **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, and validation; integration tests cover fresh and legacy migrations plus real Turso HTTP persistence.
 
 ---
 
@@ -234,8 +236,6 @@ These are intentionally out of scope for the MVP and should only be built once t
 
 Small, high-value polishes (listed, not implemented):
 
-- **Make timezone and week-start editable** in Settings > Preferences. The fields already exist on the profile and drive reminders and history grouping; only the edit UI + a data function are missing.
-- **Add a `vercel.json` cron** for `/api/notifications/send` so reminders fire in production without manual scheduler setup (an example is in `docs/notifications-and-pwa.md`, but it is not committed).
 - **Whole-number stepper for integer units** (e.g. cups) to avoid decimal input where it makes no sense.
 - **Ship a favicon.ico.** `config/branding.ts` references `/favicon.ico`, but only `icon.svg` and the PNGs exist in `public/`.
 - **Point at a custom domain** and update `AUTH_URL` + the GitHub OAuth callback, retiring the `-sandy` suffix.
