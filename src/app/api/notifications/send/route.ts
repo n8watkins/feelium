@@ -3,10 +3,13 @@ import type { PushSubscription as WebPushSubscription } from "web-push";
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
+  claimReminderDelivery,
   deletePushSubscriptionByEndpoint,
   listEnabledReminders,
   listPushSubscriptionsForUser,
+  releaseReminderDelivery,
 } from "@/server/data";
+import { addDaysISO, dateISOInTimeZone } from "@/lib/date";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
@@ -69,7 +72,16 @@ function isAuthorized(request: NextRequest): boolean {
   if (!secret) return false; // never allow when unconfigured
   const auth = request.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
-  return request.nextUrl.searchParams.get("secret") === secret;
+  return (
+    process.env.NODE_ENV !== "production" && request.nextUrl.searchParams.get("secret") === secret
+  );
+}
+
+function deliveryDate(reminderTime: string, nowHHMM: string, timezone: string, now: Date): string {
+  const localDate = dateISOInTimeZone(now, timezone);
+  return minutesOfDay(nowHHMM) < minutesOfDay(reminderTime)
+    ? addDaysISO(localDate, -1)
+    : localDate;
 }
 
 async function handle(request: NextRequest) {
@@ -89,9 +101,11 @@ async function handle(request: NextRequest) {
   const now = new Date();
 
   const reminders = await listEnabledReminders();
-  const due = reminders.filter((r) => {
+  const due = reminders.flatMap((r) => {
     const nowHHMM = currentHHMM(r.timezone, now);
-    return nowHHMM !== null && isDue(r.reminderTime, nowHHMM, windowMinutes);
+    return nowHHMM !== null && isDue(r.reminderTime, nowHHMM, windowMinutes)
+      ? [{ ...r, localDate: deliveryDate(r.reminderTime, nowHHMM, r.timezone, now) }]
+      : [];
   });
 
   if (dryRun) {
@@ -100,33 +114,64 @@ async function handle(request: NextRequest) {
       dryRun: true,
       windowMinutes,
       dueUsers: due.length,
-      due: due.map((r) => ({ userId: r.userId, reminderTime: r.reminderTime, timezone: r.timezone })),
+      due: due.map((r) => ({
+        userId: r.userId,
+        reminderTime: r.reminderTime,
+        timezone: r.timezone,
+        localDate: r.localDate,
+      })),
     });
   }
 
   let sent = 0;
   let pruned = 0;
   let failed = 0;
+  let claimedUsers = 0;
   for (const reminder of due) {
-    const subs = await listPushSubscriptionsForUser(reminder.userId);
-    for (const sub of subs) {
-      const result = await sendPush(sub.subscriptionData as unknown as WebPushSubscription, {
-        title: REMINDER_TITLE,
-        body: REMINDER_BODY,
-        url: REMINDER_URL,
-      });
-      if (result.ok) {
-        sent += 1;
-      } else if (result.gone) {
-        await deletePushSubscriptionByEndpoint(sub.endpoint);
-        pruned += 1;
-      } else {
-        failed += 1;
+    const claimed = await claimReminderDelivery(reminder.userId, reminder.localDate);
+    if (!claimed) continue;
+    claimedUsers += 1;
+
+    let userSent = 0;
+    let userPruned = 0;
+    let userFailed = 0;
+    try {
+      const subs = await listPushSubscriptionsForUser(reminder.userId);
+      for (const sub of subs) {
+        const result = await sendPush(sub.subscriptionData as unknown as WebPushSubscription, {
+          title: REMINDER_TITLE,
+          body: REMINDER_BODY,
+          url: REMINDER_URL,
+        });
+        if (result.ok) {
+          sent += 1;
+          userSent += 1;
+        } else if (result.gone) {
+          await deletePushSubscriptionByEndpoint(sub.endpoint);
+          pruned += 1;
+          userPruned += 1;
+        } else {
+          failed += 1;
+          userFailed += 1;
+        }
       }
+    } catch {
+      failed += 1;
+      userFailed += 1;
+    }
+    if (userFailed > 0 && userSent === 0 && userPruned === 0) {
+      await releaseReminderDelivery(reminder.userId, reminder.localDate);
     }
   }
 
-  return NextResponse.json({ ok: true, dueUsers: due.length, sent, pruned, failed });
+  return NextResponse.json({
+    ok: true,
+    dueUsers: due.length,
+    claimedUsers,
+    sent,
+    pruned,
+    failed,
+  });
 }
 
 export async function POST(request: NextRequest) {

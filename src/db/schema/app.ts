@@ -312,6 +312,9 @@ export const reminderSettings = sqliteTable("reminder_setting", {
   // Local time-of-day 'HH:MM' for the single daily reminder.
   reminderTime: text("reminder_time"),
   timezone: text("timezone").notNull().default("UTC"),
+  // The local calendar date most recently claimed by the send job. This makes
+  // overlapping or retried cron invocations idempotent without relying on timing.
+  lastSentLocalDate: text("last_sent_local_date"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

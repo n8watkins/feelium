@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
@@ -77,6 +77,15 @@ export async function upsertReminderSettings(input: ReminderSettings): Promise<v
     });
 }
 
+/** Keeps an enabled reminder aligned with the browser's current IANA timezone. */
+export async function updateReminderTimezone(timezone: string): Promise<void> {
+  const userId = await requireUserId();
+  await db
+    .update(reminderSettings)
+    .set({ timezone, updatedAt: new Date() })
+    .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
+}
+
 /** Stores (or refreshes) a Web Push subscription for the current user + device. */
 export async function savePushSubscription(
   subscription: WebPushSubscriptionJSON,
@@ -136,6 +145,41 @@ export async function listEnabledReminders(): Promise<EnabledReminder[]> {
       ? [{ userId: r.userId, reminderTime: r.reminderTime, timezone: r.timezone }]
       : [],
   );
+}
+
+/**
+ * Atomically reserves one reminder delivery for a user's local calendar date.
+ * Only one overlapping cron invocation can receive a successful claim.
+ */
+export async function claimReminderDelivery(userId: string, localDate: string): Promise<boolean> {
+  const rows = await db
+    .update(reminderSettings)
+    .set({ lastSentLocalDate: localDate, updatedAt: new Date() })
+    .where(
+      and(
+        eq(reminderSettings.userId, userId),
+        eq(reminderSettings.isEnabled, true),
+        or(
+          isNull(reminderSettings.lastSentLocalDate),
+          ne(reminderSettings.lastSentLocalDate, localDate),
+        ),
+      ),
+    )
+    .returning({ id: reminderSettings.id });
+  return rows.length === 1;
+}
+
+/** Allows a later cron invocation to retry after an entirely transient delivery failure. */
+export async function releaseReminderDelivery(userId: string, localDate: string): Promise<void> {
+  await db
+    .update(reminderSettings)
+    .set({ lastSentLocalDate: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(reminderSettings.userId, userId),
+        eq(reminderSettings.lastSentLocalDate, localDate),
+      ),
+    );
 }
 
 /** Push subscriptions for a given user (system context - no session). */

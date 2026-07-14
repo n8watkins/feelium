@@ -8,6 +8,7 @@ import {
   saveReminderSettingsAction,
   sendTestNotificationAction,
   subscribeToPushAction,
+  syncReminderTimezoneAction,
   unsubscribeFromPushAction,
 } from "@/app/(app)/settings/notifications/actions";
 import { Button } from "@/components/ui/button";
@@ -119,14 +120,18 @@ export function NotificationSettings({
       setSupported(true);
       setPermission(result.permission);
       setSubscription(result.sub);
-      setTimezone((prev) => (prev && prev !== "UTC" ? prev : result.detectedTz || prev || "UTC"));
+      const detectedTimezone = result.detectedTz || initialSettings.timezone || "UTC";
+      setTimezone(detectedTimezone);
+      if (initialSettings.isEnabled && detectedTimezone !== initialSettings.timezone) {
+        void syncReminderTimezoneAction(detectedTimezone);
+      }
       setReady(true);
     });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialSettings.isEnabled, initialSettings.timezone]);
 
   /** Ensures notification permission and an active push subscription saved server-side. */
   async function ensureSubscribed(): Promise<boolean> {

@@ -8,6 +8,7 @@ import {
   deleteMyPushSubscription,
   listMyPushSubscriptions,
   savePushSubscription,
+  updateReminderTimezone,
   upsertReminderSettings,
   type ReminderSettings,
   type WebPushSubscriptionJSON,
@@ -79,6 +80,17 @@ export async function saveReminderSettingsAction(
   }
   revalidatePath("/settings/notifications");
   return { ok: true };
+}
+
+/** Updates only the timezone of an already-enabled reminder after browser detection. */
+export async function syncReminderTimezoneAction(timezone: string): Promise<void> {
+  const parsed = reminderSettingsSchema.shape.timezone.safeParse(timezone);
+  if (!parsed.success) return;
+  try {
+    await updateReminderTimezone(parsed.data);
+  } catch {
+    // This background synchronization is best-effort. The next explicit save retries it.
+  }
 }
 
 export type TestSendResult = { ok: true; sent: number } | { ok: false; error: string };
