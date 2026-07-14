@@ -246,25 +246,31 @@ export const checkInTags = sqliteTable(
   ],
 );
 
-export const reminderSettings = sqliteTable("reminder_setting", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  // One optional daily reminder per user.
-  userId: text("user_id")
-    .notNull()
-    .unique()
-    .references(() => users.id, { onDelete: "cascade" }),
-  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
-  // Local time-of-day 'HH:MM' for the single daily reminder.
-  reminderTime: text("reminder_time"),
-  timezone: text("timezone").notNull().default("UTC"),
-  // The local calendar date most recently claimed by the send job. This makes
-  // overlapping or retried cron invocations idempotent without relying on timing.
-  lastSentLocalDate: text("last_sent_local_date"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const reminderSettings = sqliteTable(
+  "reminder_setting",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // One optional daily reminder per user.
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
+    // Local time-of-day 'HH:MM' for the single daily reminder.
+    reminderTime: text("reminder_time"),
+    timezone: text("timezone").notNull().default("UTC"),
+    // The local calendar date most recently claimed by the send job. This makes
+    // overlapping or retried cron invocations idempotent without relying on timing.
+    lastSentLocalDate: text("last_sent_local_date"),
+    // Persisting the next UTC occurrence lets cron read only users who might be due.
+    nextReminderAt: integer("next_reminder_at", { mode: "timestamp" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("reminder_setting_due_idx").on(t.isEnabled, t.nextReminderAt)],
+);
 
 export const pushSubscriptions = sqliteTable(
   "push_subscription",

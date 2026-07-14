@@ -68,8 +68,10 @@ One-minute Vercel Cron schedules require Vercel Pro or higher.
 
 - Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which Vercel Cron attaches automatically.
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
-- For every user with the reminder enabled, if the current wall-clock time in their saved timezone matches their reminder time (within `window` minutes, default 1), it pushes the gentle reminder to all of their subscribed devices.
+- The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
+- If the current wall-clock time in a candidate's saved timezone is within `window` minutes of its reminder time (default 10), the job pushes the gentle reminder to all subscribed devices.
 - Each user's delivery is atomically claimed once per local calendar date, so overlapping or retried cron invocations do not send duplicates.
+- Fully transient failures release the claim and remain eligible throughout the delivery window.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 

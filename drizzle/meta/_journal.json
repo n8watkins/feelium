@@ -15,6 +15,13 @@
       "when": 1784062228347,
       "tag": "0001_yielding_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784062429566,
+      "tag": "0002_quiet_ted_forrester",
+      "breakpoints": true
     }
   ]
 }

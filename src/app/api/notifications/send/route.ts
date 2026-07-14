@@ -4,12 +4,15 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   claimReminderDelivery,
+  completeReminderDelivery,
   deletePushSubscriptionByEndpoint,
-  listEnabledReminders,
+  listReminderCandidates,
   listPushSubscriptionsForUser,
   releaseReminderDelivery,
+  scheduleNextReminder,
 } from "@/server/data";
 import { addDaysISO, dateISOInTimeZone } from "@/lib/date";
+import { nextReminderAt } from "@/lib/reminders";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
@@ -37,6 +40,9 @@ export const dynamic = "force-dynamic";
 const REMINDER_TITLE = "Ready for a quick check-in?";
 const REMINDER_BODY = "Take a moment to record what you did and how you felt.";
 const REMINDER_URL = "/checkin/new";
+const DEFAULT_WINDOW_MINUTES = 10;
+const MAX_CANDIDATES_PER_RUN = 100;
+const SEND_CONCURRENCY = 10;
 
 /** Current wall-clock "HH:MM" in the given IANA timezone, or null if the tz is invalid. */
 function currentHHMM(timezone: string, now: Date): string | null {
@@ -96,23 +102,34 @@ async function handle(request: NextRequest) {
   }
 
   const params = request.nextUrl.searchParams;
-  const windowMinutes = Math.max(1, Math.min(60, Number(params.get("window")) || 1));
+  const windowMinutes = Math.max(
+    1,
+    Math.min(60, Number(params.get("window")) || DEFAULT_WINDOW_MINUTES),
+  );
   const dryRun = params.get("dryRun") === "1";
   const now = new Date();
 
-  const reminders = await listEnabledReminders();
-  const due = reminders.flatMap((r) => {
+  const candidates = await listReminderCandidates(now, MAX_CANDIDATES_PER_RUN);
+  const evaluated = candidates.flatMap((r) => {
     const nowHHMM = currentHHMM(r.timezone, now);
-    return nowHHMM !== null && isDue(r.reminderTime, nowHHMM, windowMinutes)
-      ? [{ ...r, localDate: deliveryDate(r.reminderTime, nowHHMM, r.timezone, now) }]
-      : [];
+    if (nowHHMM === null) return [];
+    return [
+      {
+        ...r,
+        due: isDue(r.reminderTime, nowHHMM, windowMinutes),
+        localDate: deliveryDate(r.reminderTime, nowHHMM, r.timezone, now),
+        nextAt: nextReminderAt(r.reminderTime, r.timezone, now),
+      },
+    ];
   });
+  const due = evaluated.filter((reminder) => reminder.due);
 
   if (dryRun) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
       windowMinutes,
+      candidates: candidates.length,
       dueUsers: due.length,
       due: due.map((r) => ({
         userId: r.userId,
@@ -127,45 +144,69 @@ async function handle(request: NextRequest) {
   let pruned = 0;
   let failed = 0;
   let claimedUsers = 0;
-  for (const reminder of due) {
-    const claimed = await claimReminderDelivery(reminder.userId, reminder.localDate);
-    if (!claimed) continue;
-    claimedUsers += 1;
+  const notDue = evaluated.filter((reminder) => !reminder.due);
+  await Promise.all(
+    notDue.map((reminder) => scheduleNextReminder(reminder.userId, reminder.nextAt)),
+  );
 
+  async function sendForUser(reminder: (typeof due)[number]) {
     let userSent = 0;
     let userPruned = 0;
     let userFailed = 0;
+    let claimed = false;
     try {
-      const subs = await listPushSubscriptionsForUser(reminder.userId);
-      for (const sub of subs) {
-        const result = await sendPush(sub.subscriptionData as unknown as WebPushSubscription, {
-          title: REMINDER_TITLE,
-          body: REMINDER_BODY,
-          url: REMINDER_URL,
-        });
+      claimed = await claimReminderDelivery(reminder.userId, reminder.localDate);
+      if (!claimed) {
+        await scheduleNextReminder(reminder.userId, reminder.nextAt);
+        return;
+      }
+      claimedUsers += 1;
+
+      const subscriptions = await listPushSubscriptionsForUser(reminder.userId);
+      for (const subscription of subscriptions) {
+        const result = await sendPush(
+          subscription.subscriptionData as unknown as WebPushSubscription,
+          {
+            title: REMINDER_TITLE,
+            body: REMINDER_BODY,
+            url: REMINDER_URL,
+          },
+        );
         if (result.ok) {
-          sent += 1;
           userSent += 1;
         } else if (result.gone) {
-          await deletePushSubscriptionByEndpoint(sub.endpoint);
-          pruned += 1;
+          await deletePushSubscriptionByEndpoint(subscription.endpoint);
           userPruned += 1;
         } else {
-          failed += 1;
           userFailed += 1;
         }
       }
     } catch {
-      failed += 1;
       userFailed += 1;
     }
-    if (userFailed > 0 && userSent === 0 && userPruned === 0) {
-      await releaseReminderDelivery(reminder.userId, reminder.localDate);
+
+    sent += userSent;
+    pruned += userPruned;
+    failed += userFailed;
+    if (!claimed) return;
+    try {
+      if (userFailed > 0 && userSent === 0 && userPruned === 0) {
+        await releaseReminderDelivery(reminder.userId, reminder.localDate);
+      } else {
+        await completeReminderDelivery(reminder.userId, reminder.localDate, reminder.nextAt);
+      }
+    } catch {
+      failed += 1;
     }
+  }
+
+  for (let offset = 0; offset < due.length; offset += SEND_CONCURRENCY) {
+    await Promise.all(due.slice(offset, offset + SEND_CONCURRENCY).map(sendForUser));
   }
 
   return NextResponse.json({
     ok: true,
+    candidates: candidates.length,
     dueUsers: due.length,
     claimedUsers,
     sent,

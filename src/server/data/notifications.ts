@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
+import { nextReminderAt } from "@/lib/reminders";
 import { requireUserId } from "./session";
 
 /**
@@ -58,6 +59,10 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
 /** Creates or updates the current user's single daily reminder. */
 export async function upsertReminderSettings(input: ReminderSettings): Promise<void> {
   const userId = await requireUserId();
+  const nextAt =
+    input.isEnabled && input.reminderTime
+      ? nextReminderAt(input.reminderTime, input.timezone)
+      : null;
   await db
     .insert(reminderSettings)
     .values({
@@ -65,6 +70,7 @@ export async function upsertReminderSettings(input: ReminderSettings): Promise<v
       isEnabled: input.isEnabled,
       reminderTime: input.reminderTime,
       timezone: input.timezone,
+      nextReminderAt: nextAt,
     })
     .onConflictDoUpdate({
       target: reminderSettings.userId,
@@ -72,6 +78,7 @@ export async function upsertReminderSettings(input: ReminderSettings): Promise<v
         isEnabled: input.isEnabled,
         reminderTime: input.reminderTime,
         timezone: input.timezone,
+        nextReminderAt: nextAt,
         updatedAt: new Date(),
       },
     });
@@ -82,7 +89,7 @@ export async function updateReminderTimezone(timezone: string): Promise<void> {
   const userId = await requireUserId();
   await db
     .update(reminderSettings)
-    .set({ timezone, updatedAt: new Date() })
+    .set({ timezone, nextReminderAt: null, updatedAt: new Date() })
     .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
 }
 
@@ -124,27 +131,58 @@ export async function listMyPushSubscriptions() {
 
 // ---- System-scoped (reminder-send job only) ------------------------------------------
 
-export type EnabledReminder = {
+export type ReminderCandidate = {
   userId: string;
   reminderTime: string;
   timezone: string;
+  nextReminderAt: Date | null;
 };
 
-/** Every user with the reminder enabled and a time set. Used by the send job. */
-export async function listEnabledReminders(): Promise<EnabledReminder[]> {
+/** A bounded batch of reminders whose persisted UTC occurrence may be due. */
+export async function listReminderCandidates(
+  now: Date,
+  limit: number,
+): Promise<ReminderCandidate[]> {
   const rows = await db
     .select({
       userId: reminderSettings.userId,
       reminderTime: reminderSettings.reminderTime,
       timezone: reminderSettings.timezone,
+      nextReminderAt: reminderSettings.nextReminderAt,
     })
     .from(reminderSettings)
-    .where(eq(reminderSettings.isEnabled, true));
+    .where(
+      and(
+        eq(reminderSettings.isEnabled, true),
+        isNotNull(reminderSettings.reminderTime),
+        or(
+          isNull(reminderSettings.nextReminderAt),
+          lte(reminderSettings.nextReminderAt, now),
+        ),
+      ),
+    )
+    .orderBy(asc(reminderSettings.nextReminderAt))
+    .limit(limit);
   return rows.flatMap((r) =>
     r.reminderTime
-      ? [{ userId: r.userId, reminderTime: r.reminderTime, timezone: r.timezone }]
+      ? [
+          {
+            userId: r.userId,
+            reminderTime: r.reminderTime,
+            timezone: r.timezone,
+            nextReminderAt: r.nextReminderAt,
+          },
+        ]
       : [],
   );
+}
+
+/** Advances a candidate that is stale or not yet due to its next UTC occurrence. */
+export async function scheduleNextReminder(userId: string, nextAt: Date): Promise<void> {
+  await db
+    .update(reminderSettings)
+    .set({ nextReminderAt: nextAt, updatedAt: new Date() })
+    .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
 }
 
 /**
@@ -174,6 +212,23 @@ export async function releaseReminderDelivery(userId: string, localDate: string)
   await db
     .update(reminderSettings)
     .set({ lastSentLocalDate: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(reminderSettings.userId, userId),
+        eq(reminderSettings.lastSentLocalDate, localDate),
+      ),
+    );
+}
+
+/** Marks the claimed local date complete and advances its persisted UTC schedule. */
+export async function completeReminderDelivery(
+  userId: string,
+  localDate: string,
+  nextAt: Date,
+): Promise<void> {
+  await db
+    .update(reminderSettings)
+    .set({ nextReminderAt: nextAt, updatedAt: new Date() })
     .where(
       and(
         eq(reminderSettings.userId, userId),
