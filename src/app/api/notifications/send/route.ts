@@ -143,7 +143,8 @@ async function handle(request: NextRequest) {
     try {
       claimed = await claimReminderDelivery(reminder, reminder.localDate);
       if (!claimed) {
-        await scheduleNextReminder(reminder, reminder.nextAt);
+        // Another invocation owns this occurrence. It must remain responsible for
+        // either completing the delivery or releasing it for retry after failure.
         return;
       }
       claimedUsers += 1;
