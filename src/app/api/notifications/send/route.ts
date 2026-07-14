@@ -5,10 +5,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   claimReminderDelivery,
   completeReminderDelivery,
-  deletePushSubscriptionByEndpoint,
+  deletePushSubscriptionForReminder,
   disableInvalidReminder,
+  hasPendingPushSubscriptionsForReminder,
   listReminderCandidates,
-  listPushSubscriptionsForUser,
+  listPushSubscriptionsForReminder,
+  markPushSubscriptionAttempt,
   releaseReminderDelivery,
   scheduleNextReminder,
   type ReminderCandidate,
@@ -42,7 +44,9 @@ const REMINDER_URL = "/checkin/new";
 const DEFAULT_WINDOW_MINUTES = 10;
 const MAX_CANDIDATES_PER_RUN = 100;
 const SEND_CONCURRENCY = 10;
-const SUBSCRIPTION_CONCURRENCY_PER_USER = 25;
+const MAX_SUBSCRIPTIONS_PER_USER_PER_RUN = 25;
+const REMINDER_DELIVERY_LEASE_MS = 2 * 60_000;
+const REMINDER_RETRY_DELAY_MS = 60_000;
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -78,14 +82,17 @@ async function handle(request: NextRequest) {
   const invalid: ReminderCandidate[] = [];
   for (const reminder of candidates) {
     try {
+      const evaluation = evaluateReminder(
+        reminder.reminderTime,
+        reminder.timezone,
+        now,
+        windowMinutes,
+      );
       evaluated.push({
         ...reminder,
-        ...evaluateReminder(
-          reminder.reminderTime,
-          reminder.timezone,
-          now,
-          windowMinutes,
-        ),
+        ...evaluation,
+        due: evaluation.due || reminder.deliveryLocalDate !== null,
+        localDate: reminder.deliveryLocalDate ?? evaluation.localDate,
       });
     } catch (error) {
       if (
@@ -137,50 +144,66 @@ async function handle(request: NextRequest) {
     let userSent = 0;
     let userPruned = 0;
     let userFailed = 0;
-    let claimed = false;
+    let claimToken: string | null = null;
+    let hasPendingSubscriptions = true;
     try {
-      claimed = await claimReminderDelivery(reminder, reminder.localDate);
-      if (!claimed) {
-        // Another invocation owns this occurrence. It must remain responsible for
-        // either completing the delivery or releasing it for retry after failure.
+      claimToken = await claimReminderDelivery(
+        reminder,
+        reminder.localDate,
+        new Date(),
+        REMINDER_DELIVERY_LEASE_MS,
+      );
+      if (!claimToken) {
         return;
       }
       claimedUsers += 1;
 
-      const subscriptions = await listPushSubscriptionsForUser(reminder.userId);
-      for (
-        let offset = 0;
-        offset < subscriptions.length;
-        offset += SUBSCRIPTION_CONCURRENCY_PER_USER
-      ) {
-        const batch = subscriptions.slice(
-          offset,
-          offset + SUBSCRIPTION_CONCURRENCY_PER_USER,
-        );
-        const results = await Promise.all(
-          batch.map(async (subscription) => ({
-            subscription,
-            result: await sendPush(
-              subscription.subscriptionData as unknown as WebPushSubscription,
-              {
-                title: REMINDER_TITLE,
-                body: REMINDER_BODY,
-                url: REMINDER_URL,
-              },
-            ),
-          })),
-        );
-        for (const { subscription, result } of results) {
-          if (result.ok) {
-            userSent += 1;
-          } else if (result.gone) {
-            await deletePushSubscriptionByEndpoint(subscription.endpoint);
-            userPruned += 1;
-          } else {
-            userFailed += 1;
-          }
+      const subscriptions = await listPushSubscriptionsForReminder(
+        reminder.userId,
+        reminder.localDate,
+        MAX_SUBSCRIPTIONS_PER_USER_PER_RUN,
+      );
+      const results = await Promise.all(
+        subscriptions.map(async (subscription) => ({
+          subscription,
+          result: await sendPush(
+            subscription.subscriptionData as unknown as WebPushSubscription,
+            {
+              title: REMINDER_TITLE,
+              body: REMINDER_BODY,
+              url: REMINDER_URL,
+            },
+          ),
+        })),
+      );
+      for (const { subscription, result } of results) {
+        if (result.ok) {
+          await markPushSubscriptionAttempt(
+            subscription.id,
+            reminder.userId,
+            reminder.localDate,
+            true,
+            new Date(),
+          );
+          userSent += 1;
+        } else if (result.gone) {
+          await deletePushSubscriptionForReminder(subscription.id, reminder.userId);
+          userPruned += 1;
+        } else {
+          await markPushSubscriptionAttempt(
+            subscription.id,
+            reminder.userId,
+            reminder.localDate,
+            false,
+            new Date(),
+          );
+          userFailed += 1;
         }
       }
+      hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
+        reminder.userId,
+        reminder.localDate,
+      );
     } catch {
       userFailed += 1;
     }
@@ -188,16 +211,22 @@ async function handle(request: NextRequest) {
     sent += userSent;
     pruned += userPruned;
     failed += userFailed;
-    if (!claimed) return;
+    if (!claimToken) return;
     try {
-      if (userFailed > 0 && userSent === 0 && userPruned === 0) {
+      if (hasPendingSubscriptions) {
         await releaseReminderDelivery(
-          reminder,
+          reminder.userId,
           reminder.localDate,
-          new Date(Date.now() + 60_000),
+          claimToken,
+          new Date(Date.now() + REMINDER_RETRY_DELAY_MS),
         );
       } else {
-        await completeReminderDelivery(reminder, reminder.localDate, reminder.nextAt);
+        await completeReminderDelivery(
+          reminder.userId,
+          reminder.localDate,
+          claimToken,
+          reminder.nextAt,
+        );
       }
     } catch {
       failed += 1;

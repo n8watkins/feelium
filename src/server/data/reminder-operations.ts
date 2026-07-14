@@ -9,6 +9,7 @@ export type ReminderCandidate = {
   reminderTime: string;
   timezone: string;
   nextReminderAt: Date | null;
+  deliveryLocalDate: string | null;
 };
 
 export function reminderScheduleCondition(reminder: ReminderCandidate) {

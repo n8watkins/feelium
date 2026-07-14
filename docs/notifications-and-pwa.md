@@ -69,11 +69,13 @@ One-minute Vercel Cron schedules require Vercel Pro or higher.
 - Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which Vercel Cron attaches automatically.
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
-- If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job pushes the gentle reminder to all subscribed devices, including at the first valid minute after a skipped spring-forward time.
-- Each user's delivery is atomically claimed once per local calendar date, so overlapping or retried cron invocations do not send duplicates.
-- Fully transient failures release the claim and move one minute later in the due queue, remaining eligible throughout the delivery window without starving other candidates.
+- If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
+- Each user's delivery has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
+- Each invocation attempts at most 25 subscriptions per user and records successful devices individually.
+- Unattempted and transiently failed devices remain pending in a fair resumable queue, even when other devices succeeded or expired subscriptions were pruned.
+- Incomplete deliveries release their lease and move one minute later in the due queue without losing the original local occurrence or starving other candidates.
 - Invalid legacy schedules are disabled with an atomic snapshot check, so they cannot permanently occupy the bounded queue or disable a concurrently corrected reminder.
-- Push requests have a one-second socket timeout and run in bounded per-user batches, so unreachable endpoints cannot hold the scheduled invocation open one subscription at a time.
+- Push requests have a one-second socket timeout and run with bounded user and subscription concurrency, so unreachable endpoints cannot hold the scheduled invocation open one subscription at a time.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 

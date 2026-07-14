@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
@@ -10,6 +10,15 @@ import {
   reminderScheduleCondition,
   type ReminderCandidate,
 } from "./reminder-operations";
+import {
+  claimReminderDeliveryLease,
+  completeReminderDeliveryLease,
+  deleteReminderSubscription,
+  hasPendingReminderSubscriptions,
+  listPendingReminderSubscriptions,
+  recordReminderSubscriptionAttempt,
+  releaseReminderDeliveryLease,
+} from "./reminder-delivery-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -84,6 +93,9 @@ export async function upsertReminderSettings(input: ReminderSettings): Promise<v
         reminderTime: input.reminderTime,
         timezone: input.timezone,
         nextReminderAt: nextAt,
+        deliveryLocalDate: null,
+        deliveryLeaseToken: null,
+        deliveryLeaseExpiresAt: null,
         updatedAt: new Date(),
       },
     });
@@ -94,7 +106,14 @@ export async function updateReminderTimezone(timezone: string): Promise<void> {
   const userId = await requireUserId();
   await db
     .update(reminderSettings)
-    .set({ timezone, nextReminderAt: null, updatedAt: new Date() })
+    .set({
+      timezone,
+      nextReminderAt: null,
+      deliveryLocalDate: null,
+      deliveryLeaseToken: null,
+      deliveryLeaseExpiresAt: null,
+      updatedAt: new Date(),
+    })
     .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
 }
 
@@ -149,6 +168,7 @@ export async function listReminderCandidates(
       reminderTime: reminderSettings.reminderTime,
       timezone: reminderSettings.timezone,
       nextReminderAt: reminderSettings.nextReminderAt,
+      deliveryLocalDate: reminderSettings.deliveryLocalDate,
     })
     .from(reminderSettings)
     .where(
@@ -171,6 +191,7 @@ export async function listReminderCandidates(
             reminderTime: r.reminderTime,
             timezone: r.timezone,
             nextReminderAt: r.nextReminderAt,
+            deliveryLocalDate: r.deliveryLocalDate,
           },
         ]
       : [],
@@ -201,67 +222,66 @@ export async function disableInvalidReminder(
 export async function claimReminderDelivery(
   reminder: ReminderCandidate,
   localDate: string,
-): Promise<boolean> {
-  const rows = await db
-    .update(reminderSettings)
-    .set({ lastSentLocalDate: localDate, updatedAt: new Date() })
-    .where(
-      and(
-        reminderScheduleCondition(reminder),
-        or(
-          isNull(reminderSettings.lastSentLocalDate),
-          ne(reminderSettings.lastSentLocalDate, localDate),
-        ),
-      ),
-    )
-    .returning({ id: reminderSettings.id });
-  return rows.length === 1;
+  now: Date,
+  leaseDurationMs: number,
+): Promise<string | null> {
+  return claimReminderDeliveryLease(db, reminder, localDate, now, leaseDurationMs);
 }
 
-/** Allows a later cron invocation to retry after an entirely transient delivery failure. */
 export async function releaseReminderDelivery(
-  reminder: ReminderCandidate,
+  userId: string,
   localDate: string,
+  token: string,
   retryAt: Date,
-): Promise<void> {
-  await db
-    .update(reminderSettings)
-    .set({
-      lastSentLocalDate: null,
-      nextReminderAt: retryAt,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        reminderScheduleCondition(reminder),
-        eq(reminderSettings.lastSentLocalDate, localDate),
-      ),
-    );
+): Promise<boolean> {
+  return releaseReminderDeliveryLease(db, userId, localDate, token, retryAt);
 }
 
 /** Marks the claimed local date complete and advances its persisted UTC schedule. */
 export async function completeReminderDelivery(
-  reminder: ReminderCandidate,
+  userId: string,
   localDate: string,
+  token: string,
   nextAt: Date,
+): Promise<boolean> {
+  return completeReminderDeliveryLease(db, userId, localDate, token, nextAt);
+}
+
+export async function listPushSubscriptionsForReminder(
+  userId: string,
+  localDate: string,
+  limit: number,
+) {
+  return listPendingReminderSubscriptions(db, userId, localDate, limit);
+}
+
+export async function hasPendingPushSubscriptionsForReminder(
+  userId: string,
+  localDate: string,
+): Promise<boolean> {
+  return hasPendingReminderSubscriptions(db, userId, localDate);
+}
+
+export async function markPushSubscriptionAttempt(
+  subscriptionId: string,
+  userId: string,
+  localDate: string,
+  delivered: boolean,
+  attemptedAt: Date,
 ): Promise<void> {
-  await db
-    .update(reminderSettings)
-    .set({ nextReminderAt: nextAt, updatedAt: new Date() })
-    .where(
-      and(
-        reminderScheduleCondition(reminder),
-        eq(reminderSettings.lastSentLocalDate, localDate),
-      ),
-    );
+  await recordReminderSubscriptionAttempt(
+    db,
+    subscriptionId,
+    userId,
+    localDate,
+    delivered,
+    attemptedAt,
+  );
 }
 
-/** Push subscriptions for a given user (system context - no session). */
-export async function listPushSubscriptionsForUser(userId: string) {
-  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
-}
-
-/** Prunes a dead subscription (system context) after a 404/410 from the push service. */
-export async function deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
-  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+export async function deletePushSubscriptionForReminder(
+  subscriptionId: string,
+  userId: string,
+): Promise<void> {
+  await deleteReminderSubscription(db, subscriptionId, userId);
 }

@@ -7,7 +7,6 @@ import { syncTimeZoneAction } from "@/app/(app)/settings/actions";
 
 /** Initializes a new profile's timezone from the device exactly once. */
 export function TimezoneSync({
-  currentTimeZone,
   shouldSync,
 }: {
   currentTimeZone: string;
@@ -17,7 +16,7 @@ export function TimezoneSync({
 
   useEffect(() => {
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!shouldSync || !detected || detected === currentTimeZone) return;
+    if (!shouldSync || !detected) return;
 
     let cancelled = false;
     syncTimeZoneAction(detected)
@@ -30,7 +29,7 @@ export function TimezoneSync({
     return () => {
       cancelled = true;
     };
-  }, [currentTimeZone, router, shouldSync]);
+  }, [router, shouldSync]);
 
   return null;
 }

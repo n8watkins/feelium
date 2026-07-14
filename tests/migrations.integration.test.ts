@@ -44,6 +44,14 @@ test("migrations create a fresh database", async () => {
     const names = columns.rows.map((row) => row.name);
     assert.ok(names.includes("last_sent_local_date"));
     assert.ok(names.includes("next_reminder_at"));
+    assert.ok(names.includes("delivery_local_date"));
+    assert.ok(names.includes("delivery_lease_token"));
+    assert.ok(names.includes("delivery_lease_expires_at"));
+
+    const subscriptionColumns = await client.execute("pragma table_info(push_subscription)");
+    const subscriptionNames = subscriptionColumns.rows.map((row) => row.name);
+    assert.ok(subscriptionNames.includes("last_reminder_local_date"));
+    assert.ok(subscriptionNames.includes("last_reminder_attempt_at"));
 
     const profileColumns = await client.execute("pragma table_info(profile)");
     assert.ok(profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"));

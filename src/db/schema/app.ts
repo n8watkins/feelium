@@ -266,9 +266,13 @@ export const reminderSettings = sqliteTable(
     // Local time-of-day 'HH:MM' for the single daily reminder.
     reminderTime: text("reminder_time"),
     timezone: text("timezone").notNull().default("UTC"),
-    // The local calendar date most recently claimed by the send job. This makes
-    // overlapping or retried cron invocations idempotent without relying on timing.
+    // The local calendar date most recently completed by the send job.
     lastSentLocalDate: text("last_sent_local_date"),
+    deliveryLocalDate: text("delivery_local_date"),
+    deliveryLeaseToken: text("delivery_lease_token"),
+    deliveryLeaseExpiresAt: integer("delivery_lease_expires_at", {
+      mode: "timestamp",
+    }),
     // Persisting the next UTC occurrence lets cron read only users who might be due.
     nextReminderAt: integer("next_reminder_at", { mode: "timestamp" }),
     createdAt: createdAt(),
@@ -294,6 +298,17 @@ export const pushSubscriptions = sqliteTable(
     deviceName: text("device_name"),
     createdAt: createdAt(),
     lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+    lastReminderLocalDate: text("last_reminder_local_date"),
+    lastReminderAttemptAt: integer("last_reminder_attempt_at", {
+      mode: "timestamp",
+    }),
   },
-  (t) => [unique("push_subscription_unique_endpoint").on(t.userId, t.endpoint)],
+  (t) => [
+    unique("push_subscription_unique_endpoint").on(t.userId, t.endpoint),
+    index("push_subscription_reminder_delivery_idx").on(
+      t.userId,
+      t.lastReminderLocalDate,
+      t.lastReminderAttemptAt,
+    ),
+  ],
 );

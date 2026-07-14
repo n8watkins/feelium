@@ -10,6 +10,15 @@ import {
   syncProfileTimeZone,
 } from "@/server/data/profile-operations";
 import { disableInvalidReminderSchedule } from "@/server/data/reminder-operations";
+import {
+  claimReminderDeliveryLease,
+  completeReminderDeliveryLease,
+  deleteReminderSubscription,
+  hasPendingReminderSubscriptions,
+  listPendingReminderSubscriptions,
+  recordReminderSubscriptionAttempt,
+  releaseReminderDeliveryLease,
+} from "@/server/data/reminder-delivery-operations";
 
 async function createTestDatabase() {
   const client = createClient({ url: ":memory:" });
@@ -34,9 +43,24 @@ async function createTestDatabase() {
       reminder_time text,
       timezone text not null default 'UTC',
       last_sent_local_date text,
+      delivery_local_date text,
+      delivery_lease_token text,
+      delivery_lease_expires_at integer,
       next_reminder_at integer,
       created_at integer not null,
       updated_at integer not null
+    );
+    create table push_subscription (
+      id text primary key,
+      user_id text not null references user(id) on delete cascade,
+      endpoint text not null,
+      subscription_data text not null,
+      device_name text,
+      created_at integer not null,
+      last_used_at integer,
+      last_reminder_local_date text,
+      last_reminder_attempt_at integer,
+      unique(user_id, endpoint)
     );
   `);
   return { client, database: drizzle({ client, schema }) };
@@ -91,6 +115,204 @@ test("background timezone sync cannot overwrite a manual preference", async () =
   }
 });
 
+test("timezone initialization completes when the detected timezone is unchanged", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('utc-user', 'utc@example.test')");
+    await ensureProfileForUser(database, "utc-user");
+
+    assert.equal(await syncProfileTimeZone(database, "utc-user", "UTC"), true);
+    const result = await client.execute(
+      "select timezone, auto_sync_timezone from profile where user_id = 'utc-user'",
+    );
+    assert.equal(result.rows[0]?.timezone, "UTC");
+    assert.equal(Number(result.rows[0]?.auto_sync_timezone), 0);
+  } finally {
+    client.close();
+  }
+});
+
+test("expired reminder leases are reclaimable and stale owners cannot complete", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('lease-user', 'lease@example.test')");
+    await client.execute(`
+      insert into reminder_setting (
+        id, user_id, is_enabled, reminder_time, timezone, next_reminder_at,
+        created_at, updated_at
+      ) values (
+        'lease-reminder', 'lease-user', 1, '09:00', 'UTC', 1, 1, 1
+      )
+    `);
+    const reminder = {
+      userId: "lease-user",
+      reminderTime: "09:00",
+      timezone: "UTC",
+      nextReminderAt: new Date(1000),
+      deliveryLocalDate: null,
+    };
+    const firstToken = await claimReminderDeliveryLease(
+      database,
+      reminder,
+      "2026-07-14",
+      new Date(1000),
+      1000,
+    );
+    assert.ok(firstToken);
+    assert.equal(
+      await claimReminderDeliveryLease(
+        database,
+        { ...reminder, nextReminderAt: new Date(2000), deliveryLocalDate: "2026-07-14" },
+        "2026-07-14",
+        new Date(1500),
+        1000,
+      ),
+      null,
+    );
+
+    const secondToken = await claimReminderDeliveryLease(
+      database,
+      { ...reminder, nextReminderAt: new Date(2000), deliveryLocalDate: "2026-07-14" },
+      "2026-07-14",
+      new Date(2000),
+      1000,
+    );
+    assert.ok(secondToken);
+    assert.notEqual(secondToken, firstToken);
+    assert.equal(
+      await completeReminderDeliveryLease(
+        database,
+        "lease-user",
+        "2026-07-14",
+        firstToken,
+        new Date(10_000),
+      ),
+      false,
+    );
+    assert.equal(
+      await releaseReminderDeliveryLease(
+        database,
+        "lease-user",
+        "2026-07-14",
+        secondToken,
+        new Date(4000),
+      ),
+      true,
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("partial reminder delivery retries failed devices after successes and pruning", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('push-user', 'push@example.test')");
+    for (const id of ["delivered", "expired", "transient"]) {
+      await client.execute({
+        sql: `insert into push_subscription
+          (id, user_id, endpoint, subscription_data, created_at)
+          values (?, 'push-user', ?, '{}', 1)`,
+        args: [id, `https://push.example/${id}`],
+      });
+    }
+
+    await recordReminderSubscriptionAttempt(
+      database,
+      "delivered",
+      "push-user",
+      "2026-07-14",
+      true,
+      new Date(1000),
+    );
+    await deleteReminderSubscription(database, "expired", "push-user");
+    await recordReminderSubscriptionAttempt(
+      database,
+      "transient",
+      "push-user",
+      "2026-07-14",
+      false,
+      new Date(1000),
+    );
+
+    assert.equal(
+      await hasPendingReminderSubscriptions(database, "push-user", "2026-07-14"),
+      true,
+    );
+    assert.deepEqual(
+      (await listPendingReminderSubscriptions(database, "push-user", "2026-07-14", 25)).map(
+        (row) => row.id,
+      ),
+      ["transient"],
+    );
+    await recordReminderSubscriptionAttempt(
+      database,
+      "transient",
+      "push-user",
+      "2026-07-14",
+      true,
+      new Date(2000),
+    );
+    assert.equal(
+      await hasPendingReminderSubscriptions(database, "push-user", "2026-07-14"),
+      false,
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("bounded reminder pages resume with subscriptions not yet attempted", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('many-user', 'many@example.test')");
+    for (let index = 0; index < 30; index += 1) {
+      await client.execute({
+        sql: `insert into push_subscription
+          (id, user_id, endpoint, subscription_data, created_at)
+          values (?, 'many-user', ?, '{}', 1)`,
+        args: [`subscription-${String(index).padStart(2, "0")}`, `https://push.example/${index}`],
+      });
+    }
+
+    const firstPage = await listPendingReminderSubscriptions(
+      database,
+      "many-user",
+      "2026-07-14",
+      25,
+    );
+    assert.equal(firstPage.length, 25);
+    for (const subscription of firstPage) {
+      await recordReminderSubscriptionAttempt(
+        database,
+        subscription.id,
+        "many-user",
+        "2026-07-14",
+        false,
+        new Date(1000),
+      );
+    }
+    const secondPage = await listPendingReminderSubscriptions(
+      database,
+      "many-user",
+      "2026-07-14",
+      25,
+    );
+    assert.deepEqual(
+      secondPage.slice(0, 5).map((row) => row.id),
+      [
+        "subscription-25",
+        "subscription-26",
+        "subscription-27",
+        "subscription-28",
+        "subscription-29",
+      ],
+    );
+  } finally {
+    client.close();
+  }
+});
+
 test("invalid legacy reminders leave the queue without affecting corrected schedules", async () => {
   const { client, database } = await createTestDatabase();
   try {
@@ -107,6 +329,7 @@ test("invalid legacy reminders leave the queue without affecting corrected sched
       reminderTime: "09:00",
       timezone: "Invalid/Timezone",
       nextReminderAt: null,
+      deliveryLocalDate: null,
     };
 
     assert.equal(
