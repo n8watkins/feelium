@@ -73,6 +73,7 @@ One-minute Vercel Cron schedules require Vercel Pro or higher.
 - Each user's delivery has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
 - Each invocation attempts at most 25 subscriptions per user and records successful devices individually.
 - Unattempted and transiently failed devices remain pending in a fair resumable queue, even when other devices succeeded or expired subscriptions were pruned.
+- A subscription is quarantined after three consecutive transient failures so a permanently failing endpoint cannot block later daily occurrences; refreshing its browser subscription clears the quarantine.
 - Incomplete deliveries release their lease and move one minute later in the due queue without losing the original local occurrence or starving other candidates.
 - Invalid legacy schedules are disabled with an atomic snapshot check, so they cannot permanently occupy the bounded queue or disable a concurrently corrected reminder.
 - Push requests have a one-second socket timeout and run with bounded user and subscription concurrency, so unreachable endpoints cannot hold the scheduled invocation open one subscription at a time.

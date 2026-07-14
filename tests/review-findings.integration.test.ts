@@ -60,6 +60,8 @@ async function createTestDatabase() {
       last_used_at integer,
       last_reminder_local_date text,
       last_reminder_attempt_at integer,
+      reminder_failure_count integer not null default 0,
+      reminder_quarantined_at integer,
       unique(user_id, endpoint)
     );
   `);
@@ -224,6 +226,7 @@ test("partial reminder delivery retries failed devices after successes and pruni
       "2026-07-14",
       true,
       new Date(1000),
+      3,
     );
     await deleteReminderSubscription(database, "expired", "push-user");
     await recordReminderSubscriptionAttempt(
@@ -233,6 +236,7 @@ test("partial reminder delivery retries failed devices after successes and pruni
       "2026-07-14",
       false,
       new Date(1000),
+      3,
     );
 
     assert.equal(
@@ -252,11 +256,17 @@ test("partial reminder delivery retries failed devices after successes and pruni
       "2026-07-14",
       true,
       new Date(2000),
+      3,
     );
     assert.equal(
       await hasPendingReminderSubscriptions(database, "push-user", "2026-07-14"),
       false,
     );
+    const recovered = await client.execute(
+      "select reminder_failure_count, reminder_quarantined_at from push_subscription where id = 'transient'",
+    );
+    assert.equal(Number(recovered.rows[0]?.reminder_failure_count), 0);
+    assert.equal(recovered.rows[0]?.reminder_quarantined_at, null);
   } finally {
     client.close();
   }
@@ -290,6 +300,7 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
         "2026-07-14",
         false,
         new Date(1000),
+        3,
       );
     }
     const secondPage = await listPendingReminderSubscriptions(
@@ -308,6 +319,60 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
         "subscription-29",
       ],
     );
+  } finally {
+    client.close();
+  }
+});
+
+test("permanently failing reminder subscriptions are quarantined after three attempts", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('failed-user', 'failed@example.test')");
+    await client.execute(`
+      insert into push_subscription
+        (id, user_id, endpoint, subscription_data, created_at)
+      values
+        ('failed-subscription', 'failed-user', 'https://push.example/failed', '{}', 1)
+    `);
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await recordReminderSubscriptionAttempt(
+        database,
+        "failed-subscription",
+        "failed-user",
+        "2026-07-14",
+        false,
+        new Date(attempt * 1000),
+        3,
+      );
+      assert.equal(
+        await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-14"),
+        true,
+      );
+    }
+
+    await recordReminderSubscriptionAttempt(
+      database,
+      "failed-subscription",
+      "failed-user",
+      "2026-07-14",
+      false,
+      new Date(3000),
+      3,
+    );
+    assert.equal(
+      await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-14"),
+      false,
+    );
+    assert.equal(
+      await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-15"),
+      false,
+    );
+    const result = await client.execute(
+      "select reminder_failure_count, reminder_quarantined_at from push_subscription where id = 'failed-subscription'",
+    );
+    assert.equal(Number(result.rows[0]?.reminder_failure_count), 3);
+    assert.equal(Number(result.rows[0]?.reminder_quarantined_at), 3);
   } finally {
     client.close();
   }

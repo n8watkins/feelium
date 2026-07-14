@@ -135,7 +135,12 @@ export async function savePushSubscription(
     })
     .onConflictDoUpdate({
       target: [pushSubscriptions.userId, pushSubscriptions.endpoint],
-      set: { subscriptionData: data, lastUsedAt: new Date() },
+      set: {
+        subscriptionData: data,
+        lastUsedAt: new Date(),
+        reminderFailureCount: 0,
+        reminderQuarantinedAt: null,
+      },
     });
 }
 
@@ -268,6 +273,7 @@ export async function markPushSubscriptionAttempt(
   localDate: string,
   delivered: boolean,
   attemptedAt: Date,
+  maxFailures: number,
 ): Promise<void> {
   await recordReminderSubscriptionAttempt(
     db,
@@ -276,6 +282,7 @@ export async function markPushSubscriptionAttempt(
     localDate,
     delivered,
     attemptedAt,
+    maxFailures,
   );
 }
 

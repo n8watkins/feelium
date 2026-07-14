@@ -302,11 +302,16 @@ export const pushSubscriptions = sqliteTable(
     lastReminderAttemptAt: integer("last_reminder_attempt_at", {
       mode: "timestamp",
     }),
+    reminderFailureCount: integer("reminder_failure_count").notNull().default(0),
+    reminderQuarantinedAt: integer("reminder_quarantined_at", {
+      mode: "timestamp",
+    }),
   },
   (t) => [
     unique("push_subscription_unique_endpoint").on(t.userId, t.endpoint),
     index("push_subscription_reminder_delivery_idx").on(
       t.userId,
+      t.reminderQuarantinedAt,
       t.lastReminderLocalDate,
       t.lastReminderAttemptAt,
     ),

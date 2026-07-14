@@ -52,6 +52,8 @@ test("migrations create a fresh database", async () => {
     const subscriptionNames = subscriptionColumns.rows.map((row) => row.name);
     assert.ok(subscriptionNames.includes("last_reminder_local_date"));
     assert.ok(subscriptionNames.includes("last_reminder_attempt_at"));
+    assert.ok(subscriptionNames.includes("reminder_failure_count"));
+    assert.ok(subscriptionNames.includes("reminder_quarantined_at"));
 
     const profileColumns = await client.execute("pragma table_info(profile)");
     assert.ok(profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"));

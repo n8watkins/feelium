@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
 import {
@@ -109,6 +109,7 @@ export async function listPendingReminderSubscriptions(
     .where(
       and(
         eq(pushSubscriptions.userId, userId),
+        isNull(pushSubscriptions.reminderQuarantinedAt),
         or(
           isNull(pushSubscriptions.lastReminderLocalDate),
           ne(pushSubscriptions.lastReminderLocalDate, localDate),
@@ -133,6 +134,7 @@ export async function hasPendingReminderSubscriptions(
     .where(
       and(
         eq(pushSubscriptions.userId, userId),
+        isNull(pushSubscriptions.reminderQuarantinedAt),
         or(
           isNull(pushSubscriptions.lastReminderLocalDate),
           ne(pushSubscriptions.lastReminderLocalDate, localDate),
@@ -150,12 +152,24 @@ export async function recordReminderSubscriptionAttempt(
   localDate: string,
   delivered: boolean,
   attemptedAt: Date,
+  maxFailures: number,
 ): Promise<void> {
+  const quarantineTimestamp = Math.floor(attemptedAt.getTime() / 1000);
   await database
     .update(pushSubscriptions)
     .set({
       lastReminderLocalDate: delivered ? localDate : undefined,
       lastReminderAttemptAt: attemptedAt,
+      reminderFailureCount: delivered
+        ? 0
+        : sql`${pushSubscriptions.reminderFailureCount} + 1`,
+      reminderQuarantinedAt: delivered
+        ? null
+        : sql`case
+            when ${pushSubscriptions.reminderFailureCount} + 1 >= ${maxFailures}
+            then ${quarantineTimestamp}
+            else ${pushSubscriptions.reminderQuarantinedAt}
+          end`,
     })
     .where(
       and(

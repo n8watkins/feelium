@@ -47,6 +47,7 @@ const SEND_CONCURRENCY = 10;
 const MAX_SUBSCRIPTIONS_PER_USER_PER_RUN = 25;
 const REMINDER_DELIVERY_LEASE_MS = 2 * 60_000;
 const REMINDER_RETRY_DELAY_MS = 60_000;
+const MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION = 3;
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -184,6 +185,7 @@ async function handle(request: NextRequest) {
             reminder.localDate,
             true,
             new Date(),
+            MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
           );
           userSent += 1;
         } else if (result.gone) {
@@ -196,6 +198,7 @@ async function handle(request: NextRequest) {
             reminder.localDate,
             false,
             new Date(),
+            MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
           );
           userFailed += 1;
         }
