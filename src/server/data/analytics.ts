@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -10,9 +10,10 @@ import {
   dailyBehaviorEntries,
   outcomeMetrics,
 } from "@/db/schema";
-import { todayISO } from "@/lib/date";
+import { addDaysISO, todayISO } from "@/lib/date";
 import {
   computeInsights,
+  TIME_RANGES,
   type BehaviorEntryRow,
   type BehaviorMeta,
   type InsightsData,
@@ -26,13 +27,15 @@ import { getCurrentProfile } from "./profile";
 /**
  * Loads everything the Insights tab needs for one time range (PRD 16) and hands it to the
  * pure analytics engine. All rows are owner-scoped; both active and archived metrics are
- * fetched so archived-but-historical data still appears (PRD 16.6). The dataset for a
- * personal tracker is small, so we read the full history once and let the engine window
- * it - that also lets the "all time" range find the earliest recorded day.
+ * fetched so archived-but-historical data still appears (PRD 16.6). Fixed ranges are
+ * bounded in SQL so query and transfer costs do not grow with the user's full history.
  */
 export async function getInsights(range: TimeRange): Promise<InsightsData> {
   const userId = await requireUserId();
   const profile = await getCurrentProfile();
+  const today = todayISO(profile?.timezone);
+  const rangeDays = TIME_RANGES.find((item) => item.value === range)?.days ?? null;
+  const startDate = rangeDays == null ? null : addDaysISO(today, -(rangeDays - 1));
 
   const [behaviorRows, outcomeRows, entryRows, valueRows] = await Promise.all([
     db
@@ -67,7 +70,13 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
         numericValue: dailyBehaviorEntries.numericValue,
       })
       .from(dailyBehaviorEntries)
-      .where(eq(dailyBehaviorEntries.userId, userId)),
+      .where(
+        and(
+          eq(dailyBehaviorEntries.userId, userId),
+          lte(dailyBehaviorEntries.entryDate, today),
+          startDate ? gte(dailyBehaviorEntries.entryDate, startDate) : undefined,
+        ),
+      ),
     db
       .select({
         outcomeMetricId: checkInValues.outcomeMetricId,
@@ -79,7 +88,14 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
       })
       .from(checkInValues)
       .innerJoin(checkIns, eq(checkInValues.checkInId, checkIns.id))
-      .where(eq(checkInValues.userId, userId)),
+      .where(
+        and(
+          eq(checkInValues.userId, userId),
+          eq(checkIns.userId, userId),
+          lte(checkIns.localDate, today),
+          startDate ? gte(checkIns.localDate, startDate) : undefined,
+        ),
+      ),
   ]);
 
   const behaviorMeta: BehaviorMeta[] = [...behaviorRows]
@@ -122,7 +138,7 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
 
   return computeInsights({
     range,
-    today: todayISO(profile?.timezone),
+    today,
     behaviors: behaviorMeta,
     outcomes: outcomeMeta,
     entries,

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -35,6 +35,13 @@ export type HistoryDay = {
   tags: string[];
   notePreview: string | null;
 };
+
+export type HistoryPage = {
+  days: HistoryDay[];
+  nextCursor: string | null;
+};
+
+const HISTORY_PAGE_SIZE = 30;
 
 type DayValue = {
   occurredAt: Date;
@@ -86,8 +93,44 @@ function summarizeOutcome(
  * Only days with data are returned. Archived metrics are included wherever they hold
  * recorded values (PRD 16.6), because history never hides data behind a later archive.
  */
-export async function listHistoryDays(): Promise<HistoryDay[]> {
+export async function listHistoryDays(before?: string): Promise<HistoryPage> {
   const userId = await requireUserId();
+
+  const [entryDates, checkInDates] = await Promise.all([
+    db
+      .selectDistinct({ date: dailyBehaviorEntries.entryDate })
+      .from(dailyBehaviorEntries)
+      .where(
+        and(
+          eq(dailyBehaviorEntries.userId, userId),
+          before ? lt(dailyBehaviorEntries.entryDate, before) : undefined,
+          or(
+            isNotNull(dailyBehaviorEntries.booleanValue),
+            isNotNull(dailyBehaviorEntries.numericValue),
+          ),
+        ),
+      )
+      .orderBy(desc(dailyBehaviorEntries.entryDate))
+      .limit(HISTORY_PAGE_SIZE + 1),
+    db
+      .selectDistinct({ date: checkIns.localDate })
+      .from(checkIns)
+      .where(
+        and(
+          eq(checkIns.userId, userId),
+          before ? lt(checkIns.localDate, before) : undefined,
+        ),
+      )
+      .orderBy(desc(checkIns.localDate))
+      .limit(HISTORY_PAGE_SIZE + 1),
+  ]);
+
+  const allDates = [...new Set([...entryDates, ...checkInDates].map((row) => row.date))].sort(
+    (a, b) => (a < b ? 1 : -1),
+  );
+  const hasMore = allDates.length > HISTORY_PAGE_SIZE;
+  const pageDates = allDates.slice(0, HISTORY_PAGE_SIZE);
+  if (pageDates.length === 0) return { days: [], nextCursor: null };
 
   const [entryRows, checkInRows, valueRows, tagRows] = await Promise.all([
     db
@@ -97,7 +140,12 @@ export async function listHistoryDays(): Promise<HistoryDay[]> {
         numericValue: dailyBehaviorEntries.numericValue,
       })
       .from(dailyBehaviorEntries)
-      .where(eq(dailyBehaviorEntries.userId, userId)),
+      .where(
+        and(
+          eq(dailyBehaviorEntries.userId, userId),
+          inArray(dailyBehaviorEntries.entryDate, pageDates),
+        ),
+      ),
     db
       .select({
         localDate: checkIns.localDate,
@@ -105,7 +153,7 @@ export async function listHistoryDays(): Promise<HistoryDay[]> {
         note: checkIns.note,
       })
       .from(checkIns)
-      .where(eq(checkIns.userId, userId)),
+      .where(and(eq(checkIns.userId, userId), inArray(checkIns.localDate, pageDates))),
     db
       .select({
         localDate: checkIns.localDate,
@@ -122,13 +170,15 @@ export async function listHistoryDays(): Promise<HistoryDay[]> {
       .from(checkInValues)
       .innerJoin(checkIns, eq(checkInValues.checkInId, checkIns.id))
       .innerJoin(outcomeMetrics, eq(checkInValues.outcomeMetricId, outcomeMetrics.id))
-      .where(eq(checkInValues.userId, userId)),
+      .where(
+        and(eq(checkInValues.userId, userId), inArray(checkIns.localDate, pageDates)),
+      ),
     db
       .select({ localDate: checkIns.localDate, name: tags.name })
       .from(checkInTags)
       .innerJoin(checkIns, eq(checkInTags.checkInId, checkIns.id))
       .innerJoin(tags, eq(checkInTags.tagId, tags.id))
-      .where(eq(checkIns.userId, userId)),
+      .where(and(eq(checkIns.userId, userId), inArray(checkIns.localDate, pageDates))),
   ]);
 
   const dates = new Set<string>();
@@ -197,7 +247,7 @@ export async function listHistoryDays(): Promise<HistoryDay[]> {
     set.add(row.name);
   }
 
-  return [...dates]
+  const days = [...dates]
     .sort((a, b) => (a < b ? 1 : -1)) // ISO strings sort chronologically; reverse for newest-first
     .map((date) => {
       const metrics = byDate.get(date);
@@ -229,6 +279,11 @@ export async function listHistoryDays(): Promise<HistoryDay[]> {
         notePreview: latestNote.get(date)?.note ?? null,
       };
     });
+
+  return {
+    days,
+    nextCursor: hasMore ? pageDates.at(-1) ?? null : null,
+  };
 }
 
 // ---------------------------------------------------------------------------

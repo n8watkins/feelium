@@ -4,13 +4,23 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { DEFAULT_TIME_ZONE, formatDayFull, relativeDayLabel } from "@/lib/date";
+import { isISODate } from "@/lib/validation";
+import { cn } from "@/lib/utils";
 import { getCurrentProfile, listHistoryDays, type HistoryDay } from "@/server/data";
 
 export const metadata = { title: "History" };
 
-export default async function HistoryPage() {
-  const [days, profile] = await Promise.all([listHistoryDays(), getCurrentProfile()]);
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ before?: string | string[] }>;
+}) {
+  const rawBefore = (await searchParams).before;
+  const before = typeof rawBefore === "string" && isISODate(rawBefore) ? rawBefore : undefined;
+  const [history, profile] = await Promise.all([listHistoryDays(before), getCurrentProfile()]);
+  const { days, nextCursor } = history;
   const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
 
   return (
@@ -35,6 +45,16 @@ export default async function HistoryPage() {
             ))}
           </ul>
         )}
+        {nextCursor ? (
+          <div className="mt-6 flex justify-center">
+            <Link
+              href={`/history?before=${encodeURIComponent(nextCursor)}`}
+              className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+            >
+              Older days
+            </Link>
+          </div>
+        ) : null}
       </div>
     </>
   );
