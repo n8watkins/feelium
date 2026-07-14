@@ -115,7 +115,10 @@ export function NumericStepper({
         size="icon"
         className="size-12"
         aria-label={`Increase ${label}`}
-        onClick={() => onChange(recorded ? (value as number) + 1 : 1)}
+        disabled={recorded && value >= MAX_NUMERIC_VALUE}
+        onClick={() =>
+          onChange(recorded ? Math.min(MAX_NUMERIC_VALUE, value + 1) : 1)
+        }
       >
         <Plus className="size-4" aria-hidden="true" />
       </Button>
