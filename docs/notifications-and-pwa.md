@@ -61,17 +61,19 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 ## Reminder delivery (production)
 
 The actual scheduled send needs a server trigger.
-This project builds the HTTP entry point only; it does not provision any cloud infrastructure.
+The committed `vercel.json` schedules the endpoint every minute on Vercel.
+One-minute Vercel Cron schedules require Vercel Pro or higher.
 
 `POST` or `GET` `/api/notifications/send`:
 
-- Authenticated with `Authorization: Bearer <CRON_SECRET>` (Vercel Cron attaches this automatically) or a `?secret=<CRON_SECRET>` query parameter.
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which Vercel Cron attaches automatically.
+- Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - For every user with the reminder enabled, if the current wall-clock time in their saved timezone matches their reminder time (within `window` minutes, default 1), it pushes the gentle reminder to all of their subscribed devices.
+- Each user's delivery is atomically claimed once per local calendar date, so overlapping or retried cron invocations do not send duplicates.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 
-In production, run a scheduler every minute against this endpoint.
-Example `vercel.json`:
+The committed schedule runs every minute:
 
 ```json
 {
