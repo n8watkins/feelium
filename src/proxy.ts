@@ -28,7 +28,9 @@ const authMiddleware = auth((req) => {
   }
 
   if (!isLoggedIn) {
-    return NextResponse.redirect(new URL("/login", req.nextUrl));
+    const loginUrl = new URL("/login", req.nextUrl);
+    loginUrl.searchParams.set("next", `${req.nextUrl.pathname}${req.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
