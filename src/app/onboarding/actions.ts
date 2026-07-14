@@ -12,6 +12,7 @@ import {
 import { createStarterItems, getTrackingCounts } from "@/server/data";
 import { updateProfileTimeZone } from "@/server/data";
 import { isValidTimeZone } from "@/lib/date";
+import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 export type OnboardingState = { error?: string };
 
@@ -48,6 +49,7 @@ export async function completeCustomSetupAction(
     const name =
       String(formData.get(`behavior-${index}-name`) ?? "").trim() ||
       behavior.name;
+    if (name.length > MAX_NAME_LENGTH) return;
     behaviors.push({ ...behavior, name });
   });
 
@@ -56,6 +58,7 @@ export async function completeCustomSetupAction(
     if (formData.get(`outcome-${index}-included`) !== "on") return;
     const name =
       String(formData.get(`outcome-${index}-name`) ?? "").trim() || outcome.name;
+    if (name.length > MAX_NAME_LENGTH) return;
     outcomes.push({ ...outcome, name });
   });
 

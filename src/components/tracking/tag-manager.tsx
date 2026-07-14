@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 type Tag = { id: string; name: string };
 
@@ -46,6 +47,7 @@ export function TagManager({ tags }: { tags: Tag[] }) {
             id="tag-name"
             name="name"
             placeholder="Work, Poor sleep, Weekend…"
+            maxLength={MAX_NAME_LENGTH}
             aria-invalid={Boolean(state.error)}
             aria-describedby={state.error ? "tag-error" : undefined}
           />
@@ -73,6 +75,7 @@ export function TagManager({ tags }: { tags: Tag[] }) {
                 <Input
                   name="name"
                   defaultValue={tag.name}
+                  maxLength={MAX_NAME_LENGTH}
                   aria-label={`Rename ${tag.name}`}
                 />
                 <Button type="submit" variant="outline">

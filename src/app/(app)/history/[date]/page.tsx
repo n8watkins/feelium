@@ -15,6 +15,7 @@ import {
   formatTime,
   relativeDayLabel,
 } from "@/lib/date";
+import { isISODate } from "@/lib/validation";
 import {
   getDayDetail,
   getCurrentProfile,
@@ -22,15 +23,13 @@ import {
   type DayCheckIn,
 } from "@/server/data";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ date: string }>;
 }) {
   const { date } = await params;
-  return { title: ISO_DATE.test(date) ? formatDayFull(date) : "History" };
+  return { title: isISODate(date) ? formatDayFull(date) : "History" };
 }
 
 export default async function DayDetailPage({
@@ -39,7 +38,7 @@ export default async function DayDetailPage({
   params: Promise<{ date: string }>;
 }) {
   const { date } = await params;
-  if (!ISO_DATE.test(date)) notFound();
+  if (!isISODate(date)) notFound();
 
   const [detail, profile] = await Promise.all([getDayDetail(date), getCurrentProfile()]);
   const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;

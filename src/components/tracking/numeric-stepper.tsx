@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatUnitAmount } from "@/config/tracking";
+import { MAX_NUMERIC_VALUE } from "@/lib/validation";
 
 /**
  * Numeric value control shared by the Today behavior rows and the check-in outcomes.
@@ -49,8 +50,8 @@ export function NumericStepper({
       return;
     }
     const parsed = Number(trimmed);
-    if (Number.isNaN(parsed)) return; // ignore junk, keep current value
-    onChange(Math.max(0, parsed));
+    if (!Number.isFinite(parsed)) return; // ignore junk, keep current value
+    onChange(Math.min(MAX_NUMERIC_VALUE, Math.max(0, parsed)));
   }
 
   if (editing) {
@@ -61,6 +62,7 @@ export function NumericStepper({
           type="number"
           inputMode="decimal"
           min={0}
+          max={MAX_NUMERIC_VALUE}
           step="any"
           value={draft}
           aria-label={`${label} value`}

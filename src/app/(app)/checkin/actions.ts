@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { checkInPayloadSchema, recordIdSchema } from "@/lib/validation";
 import {
   createCheckIn,
   updateCheckIn,
@@ -31,17 +32,21 @@ function revalidateCheckInViews(localDate: string) {
 export async function createCheckInAction(
   payload: CheckInPayload,
 ): Promise<CheckInResult | void> {
-  if (!hasContent(payload)) {
+  const parsed = checkInPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { ok: false, error: "Some check-in values were invalid." };
+  }
+  if (!hasContent(parsed.data)) {
     return { ok: false, error: "Add at least one outcome, tag, or note." };
   }
 
   try {
-    await createCheckIn(payload);
+    await createCheckIn(parsed.data);
   } catch {
     return { ok: false, error: "Something went wrong saving your check-in." };
   }
 
-  revalidateCheckInViews(payload.localDate);
+  revalidateCheckInViews(parsed.data.localDate);
   // Land back on Today with a success confirmation (the ?checkin=saved flag drives a toast).
   redirect("/today?checkin=saved");
 }
@@ -51,18 +56,23 @@ export async function updateCheckInAction(
   payload: CheckInPayload,
   returnTo?: string,
 ): Promise<CheckInResult | void> {
-  if (!hasContent(payload)) {
+  const checkInId = recordIdSchema.safeParse(id);
+  const parsed = checkInPayloadSchema.safeParse(payload);
+  if (!checkInId.success || !parsed.success) {
+    return { ok: false, error: "Some check-in values were invalid." };
+  }
+  if (!hasContent(parsed.data)) {
     return { ok: false, error: "Add at least one outcome, tag, or note." };
   }
 
   try {
-    const ok = await updateCheckIn(id, payload);
+    const ok = await updateCheckIn(checkInId.data, parsed.data);
     if (!ok) return { ok: false, error: "That check-in could not be found." };
   } catch {
     return { ok: false, error: "Something went wrong saving your check-in." };
   }
 
-  revalidateCheckInViews(payload.localDate);
+  revalidateCheckInViews(parsed.data.localDate);
   // Edits launched from History return to that day; everything else to Today.
   redirect(safeRedirectPath(returnTo, "/today"));
 }

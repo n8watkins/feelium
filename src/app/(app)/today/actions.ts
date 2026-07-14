@@ -7,6 +7,11 @@ import {
   setBehaviorBoolean,
   setBehaviorNumeric,
 } from "@/server/data";
+import {
+  finiteNonNegativeNumberSchema,
+  isoDateSchema,
+  recordIdSchema,
+} from "@/lib/validation";
 
 /**
  * Inline behavior-logging actions, reused by Today and by History day detail (past dates).
@@ -27,8 +32,11 @@ export async function setBehaviorBooleanAction(
   value: boolean,
   entryDate: string,
 ) {
-  await setBehaviorBoolean(behaviorId, value, entryDate);
-  revalidateBehaviorViews(entryDate);
+  const id = recordIdSchema.parse(behaviorId);
+  if (typeof value !== "boolean") throw new Error("INVALID_BOOLEAN");
+  const date = isoDateSchema.parse(entryDate);
+  await setBehaviorBoolean(id, value, date);
+  revalidateBehaviorViews(date);
 }
 
 export async function setBehaviorNumericAction(
@@ -36,14 +44,19 @@ export async function setBehaviorNumericAction(
   value: number,
   entryDate: string,
 ) {
-  await setBehaviorNumeric(behaviorId, value, entryDate);
-  revalidateBehaviorViews(entryDate);
+  const id = recordIdSchema.parse(behaviorId);
+  const next = finiteNonNegativeNumberSchema.parse(value);
+  const date = isoDateSchema.parse(entryDate);
+  await setBehaviorNumeric(id, next, date);
+  revalidateBehaviorViews(date);
 }
 
 export async function clearBehaviorEntryAction(
   behaviorId: string,
   entryDate: string,
 ) {
-  await clearBehaviorEntry(behaviorId, entryDate);
-  revalidateBehaviorViews(entryDate);
+  const id = recordIdSchema.parse(behaviorId);
+  const date = isoDateSchema.parse(entryDate);
+  await clearBehaviorEntry(id, date);
+  revalidateBehaviorViews(date);
 }

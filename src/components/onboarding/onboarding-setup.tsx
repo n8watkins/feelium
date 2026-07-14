@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 export function OnboardingSetup() {
   const [mode, setMode] = useState<"choose" | "customize">("choose");
@@ -104,6 +105,7 @@ export function OnboardingSetup() {
               <Input
                 name={`behavior-${index}-name`}
                 defaultValue={behavior.name}
+                maxLength={MAX_NAME_LENGTH}
                 aria-label={`Behavior ${index + 1} name`}
               />
             </li>
@@ -128,6 +130,7 @@ export function OnboardingSetup() {
               <Input
                 name={`outcome-${index}-name`}
                 defaultValue={outcome.name}
+                maxLength={MAX_NAME_LENGTH}
                 aria-label={`Outcome ${index + 1} name`}
               />
             </li>

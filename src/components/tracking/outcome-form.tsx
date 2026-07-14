@@ -10,6 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  MAX_DESCRIPTION_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_UNIT_LENGTH,
+} from "@/lib/validation";
 
 export type OutcomeFormDefaults = {
   name?: string;
@@ -68,6 +73,7 @@ export function OutcomeForm({
           name="name"
           defaultValue={state.values?.name ?? defaults?.name}
           required
+          maxLength={MAX_NAME_LENGTH}
           aria-invalid={Boolean(errors.name)}
           aria-describedby={errors.name ? "name-error" : undefined}
         />
@@ -166,6 +172,7 @@ export function OutcomeForm({
             name="unit"
             defaultValue={state.values?.unit ?? defaults?.unit}
             placeholder="hours, kg, bpm…"
+            maxLength={MAX_UNIT_LENGTH}
           />
         </div>
       ) : (
@@ -180,6 +187,7 @@ export function OutcomeForm({
           id="description"
           name="description"
           defaultValue={state.values?.description ?? defaults?.description}
+          maxLength={MAX_DESCRIPTION_LENGTH}
         />
       </div>
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { signOut } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { deleteAccount, deleteAllTrackingData } from "@/server/data";
 
 export type DeleteResult = { ok: boolean; error?: string };
@@ -13,7 +13,12 @@ export type DeleteResult = { ok: boolean; error?: string };
  * screen (PRD 19). The account and profile survive, so they stay signed in. On failure we
  * return an error the dialog surfaces; on success we redirect (which never returns).
  */
-export async function deleteAllTrackingDataAction(): Promise<DeleteResult> {
+export async function deleteAllTrackingDataAction(
+  confirmation: string,
+): Promise<DeleteResult> {
+  if (confirmation !== "DELETE") {
+    return { ok: false, error: "Type DELETE to confirm this operation." };
+  }
   try {
     await deleteAllTrackingData();
   } catch (error) {
@@ -36,7 +41,14 @@ export async function deleteAllTrackingDataAction(): Promise<DeleteResult> {
  * then signs them out to the login screen. signOut() clears the session cookie and
  * redirects; if any JWT survives, the stale-session guard handles it on the next request.
  */
-export async function deleteAccountAction(): Promise<DeleteResult> {
+export async function deleteAccountAction(
+  confirmation: string,
+): Promise<DeleteResult> {
+  const session = await auth();
+  const expected = session?.user?.email ?? "delete my account";
+  if (confirmation !== expected) {
+    return { ok: false, error: "The account confirmation did not match." };
+  }
   try {
     await deleteAccount();
   } catch (error) {

@@ -6,6 +6,11 @@ import { redirect } from "next/navigation";
 import { isOutcomeDirection, isOutcomeInputType } from "@/config/tracking";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
+  MAX_DESCRIPTION_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_UNIT_LENGTH,
+} from "@/lib/validation";
+import {
   archiveOutcomeMetric,
   createOutcomeMetric,
   InputTypeLockedError,
@@ -49,6 +54,12 @@ function parseOutcome(
 
   const errors: Record<string, string> = {};
   if (!values.name) errors.name = "Name is required.";
+  if (values.name.length > MAX_NAME_LENGTH)
+    errors.name = `Keep the name under ${MAX_NAME_LENGTH} characters.`;
+  if (values.unit.length > MAX_UNIT_LENGTH)
+    errors.unit = `Keep the unit under ${MAX_UNIT_LENGTH} characters.`;
+  if (values.description.length > MAX_DESCRIPTION_LENGTH)
+    errors.description = `Keep the description under ${MAX_DESCRIPTION_LENGTH} characters.`;
   if (!isOutcomeInputType(values.inputType))
     errors.inputType = "Choose an input type.";
   if (hasDirection && !isOutcomeDirection(values.desiredDirection))
