@@ -83,4 +83,6 @@ The email magic-link and email/password providers are **disabled but preserved a
 
 ### Re-enabling
 
-When a verified Resend sender domain (or an alternative email transport) is available, follow the re-enable note in `src/auth.ts`: uncomment the provider imports and definitions, add them back to the `providers` array, and restore the email/password + magic-link UI in `src/app/login/page.tsx`. No server-side rewrite is needed.
+When a verified Resend sender domain (or an alternative email transport) is available, follow the re-enable note in `src/auth.ts`: uncomment the provider imports and definitions, add them back to the `providers` array, and restore the email/password + magic-link UI in `src/app/login/page.tsx`.
+The development provider is a plain Auth.js `EmailConfig` that prints links to the server console, so restoring it does not require Nodemailer or an SMTP dependency.
+No server-side rewrite is needed.
