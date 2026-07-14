@@ -6,13 +6,14 @@ import {
   claimReminderDelivery,
   completeReminderDelivery,
   deletePushSubscriptionByEndpoint,
+  disableInvalidReminder,
   listReminderCandidates,
   listPushSubscriptionsForUser,
   releaseReminderDelivery,
   scheduleNextReminder,
+  type ReminderCandidate,
 } from "@/server/data";
-import { addDaysISO, dateISOInTimeZone } from "@/lib/date";
-import { nextReminderAt } from "@/lib/reminders";
+import { evaluateReminder, type ReminderEvaluation } from "@/lib/reminders";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
@@ -24,9 +25,9 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
  * the HTTP entry point a scheduler drives. Example vercel.json:
  *   { "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }] }
  *
- * For each user with the reminder enabled, if the current wall-clock time in their saved
- * timezone matches their reminder time (within `window` minutes, default 10), we push the
- * gentle daily reminder to all of their subscribed devices and prune any that are gone.
+ * For each user with the reminder enabled, if the resolved occurrence in their saved
+ * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
+ * all of their subscribed devices and prune any that are gone.
  *
  * Manual/local testing (no cloud):
  *   curl -X POST "http://localhost:3002/api/notifications/send?secret=$CRON_SECRET"
@@ -45,35 +46,6 @@ const MAX_CANDIDATES_PER_RUN = 100;
 const SEND_CONCURRENCY = 10;
 const SUBSCRIPTION_CONCURRENCY_PER_USER = 25;
 
-/** Current wall-clock "HH:MM" in the given IANA timezone, or null if the tz is invalid. */
-function currentHHMM(timezone: string, now: Date): string | null {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(now);
-    const hh = parts.find((p) => p.type === "hour")?.value;
-    const mm = parts.find((p) => p.type === "minute")?.value;
-    if (hh == null || mm == null) return null;
-    return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}`;
-  } catch {
-    return null;
-  }
-}
-
-function minutesOfDay(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-/** True when `now` is within [reminder, reminder + window) minutes (handles midnight wrap). */
-function isDue(reminderTime: string, nowHHMM: string, windowMinutes: number): boolean {
-  const diff = (minutesOfDay(nowHHMM) - minutesOfDay(reminderTime) + 1440) % 1440;
-  return diff < windowMinutes;
-}
-
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // never allow when unconfigured
@@ -82,13 +54,6 @@ function isAuthorized(request: NextRequest): boolean {
   return (
     process.env.NODE_ENV !== "production" && request.nextUrl.searchParams.get("secret") === secret
   );
-}
-
-function deliveryDate(reminderTime: string, nowHHMM: string, timezone: string, now: Date): string {
-  const localDate = dateISOInTimeZone(now, timezone);
-  return minutesOfDay(nowHHMM) < minutesOfDay(reminderTime)
-    ? addDaysISO(localDate, -1)
-    : localDate;
 }
 
 async function handle(request: NextRequest) {
@@ -111,18 +76,34 @@ async function handle(request: NextRequest) {
   const now = new Date();
 
   const candidates = await listReminderCandidates(now, MAX_CANDIDATES_PER_RUN);
-  const evaluated = candidates.flatMap((r) => {
-    const nowHHMM = currentHHMM(r.timezone, now);
-    if (nowHHMM === null) return [];
-    return [
-      {
-        ...r,
-        due: isDue(r.reminderTime, nowHHMM, windowMinutes),
-        localDate: deliveryDate(r.reminderTime, nowHHMM, r.timezone, now),
-        nextAt: nextReminderAt(r.reminderTime, r.timezone, now),
-      },
-    ];
-  });
+  const evaluated: Array<ReminderCandidate & ReminderEvaluation> = [];
+  const invalid: ReminderCandidate[] = [];
+  for (const reminder of candidates) {
+    try {
+      evaluated.push({
+        ...reminder,
+        ...evaluateReminder(
+          reminder.reminderTime,
+          reminder.timezone,
+          now,
+          windowMinutes,
+        ),
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        [
+          "INVALID_REMINDER_TIME",
+          "INVALID_TIMEZONE",
+          "UNRESOLVABLE_REMINDER_TIME",
+        ].includes(error.message)
+      ) {
+        invalid.push(reminder);
+        continue;
+      }
+      throw error;
+    }
+  }
   const due = evaluated.filter((reminder) => reminder.due);
 
   if (dryRun) {
@@ -131,6 +112,7 @@ async function handle(request: NextRequest) {
       dryRun: true,
       windowMinutes,
       candidates: candidates.length,
+      invalidCandidates: invalid.length,
       dueUsers: due.length,
       due: due.map((r) => ({
         userId: r.userId,
@@ -145,6 +127,9 @@ async function handle(request: NextRequest) {
   let pruned = 0;
   let failed = 0;
   let claimedUsers = 0;
+  const disabledInvalid = (await Promise.all(invalid.map(disableInvalidReminder))).filter(
+    Boolean,
+  ).length;
   const notDue = evaluated.filter((reminder) => !reminder.due);
   await Promise.all(
     notDue.map((reminder) => scheduleNextReminder(reminder, reminder.nextAt)),
@@ -227,6 +212,7 @@ async function handle(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     candidates: candidates.length,
+    disabledInvalid,
     dueUsers: due.length,
     claimedUsers,
     sent,

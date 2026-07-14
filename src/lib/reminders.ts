@@ -6,6 +6,19 @@ type LocalParts = {
   scalar: number;
 };
 
+export type ReminderEvaluation = {
+  due: boolean;
+  localDate: string;
+  nextAt: Date;
+};
+
+function assertValidReminderTime(reminderTime: string): void {
+  const match = /^(\d{2}):(\d{2})$/.exec(reminderTime);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
+    throw new Error("INVALID_REMINDER_TIME");
+  }
+}
+
 function localParts(value: Date, timezone: string): LocalParts {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -37,6 +50,7 @@ export function reminderOccurrence(
   timezone: string,
 ): Date {
   if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
+  assertValidReminderTime(reminderTime);
   const [year, month, day] = localDate.split("-").map(Number);
   const [hour, minute] = reminderTime.split(":").map(Number);
   const targetScalar = Date.UTC(year, month - 1, day, hour, minute);
@@ -81,4 +95,27 @@ export function nextReminderAt(
   const today = reminderOccurrence(localDate, reminderTime, timezone);
   if (today.getTime() > after.getTime()) return today;
   return reminderOccurrence(addDaysISO(localDate, 1), reminderTime, timezone);
+}
+
+export function evaluateReminder(
+  reminderTime: string,
+  timezone: string,
+  now: Date,
+  windowMinutes: number,
+): ReminderEvaluation {
+  if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
+  assertValidReminderTime(reminderTime);
+  const today = dateISOInTimeZone(now, timezone);
+  const todayOccurrence = reminderOccurrence(today, reminderTime, timezone);
+  const localDate = todayOccurrence.getTime() <= now.getTime() ? today : addDaysISO(today, -1);
+  const occurrence =
+    localDate === today
+      ? todayOccurrence
+      : reminderOccurrence(localDate, reminderTime, timezone);
+  const elapsed = now.getTime() - occurrence.getTime();
+  return {
+    due: elapsed >= 0 && elapsed < windowMinutes * 60_000,
+    localDate,
+    nextAt: nextReminderAt(reminderTime, timezone, now),
+  };
 }

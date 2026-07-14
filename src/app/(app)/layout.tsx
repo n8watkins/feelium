@@ -4,8 +4,7 @@ import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { TimezoneSync } from "@/components/timezone-sync";
-import { DEFAULT_TIME_ZONE } from "@/lib/date";
-import { ensureProfile, getCurrentProfile, StaleSessionError } from "@/server/data";
+import { ensureProfile, StaleSessionError } from "@/server/data";
 
 /**
  * Layout for the authenticated app. Guards every child route with a server-side session
@@ -23,10 +22,9 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const profile = await getCurrentProfile();
-
+  let profile: Awaited<ReturnType<typeof ensureProfile>>;
   try {
-    await ensureProfile();
+    profile = await ensureProfile();
   } catch (error) {
     // Stale JWT whose user was deleted (account deletion elsewhere, or a dev DB reset):
     // route through the recovery sign-out, which clears the cookie and lands on /login.
@@ -39,8 +37,8 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-dvh">
       <TimezoneSync
-        currentTimeZone={profile?.timezone ?? DEFAULT_TIME_ZONE}
-        shouldSync={profile?.autoSyncTimezone ?? false}
+        currentTimeZone={profile.timezone}
+        shouldSync={profile.autoSyncTimezone}
       />
       <AppSidebar />
       <div className="flex min-h-dvh flex-1 flex-col">

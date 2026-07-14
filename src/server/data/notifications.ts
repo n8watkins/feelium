@@ -5,6 +5,11 @@ import { and, asc, eq, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 import { db } from "@/db";
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
 import { nextReminderAt } from "@/lib/reminders";
+import {
+  disableInvalidReminderSchedule,
+  reminderScheduleCondition,
+  type ReminderCandidate,
+} from "./reminder-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -131,24 +136,7 @@ export async function listMyPushSubscriptions() {
 
 // ---- System-scoped (reminder-send job only) ------------------------------------------
 
-export type ReminderCandidate = {
-  userId: string;
-  reminderTime: string;
-  timezone: string;
-  nextReminderAt: Date | null;
-};
-
-function matchesCandidateSchedule(reminder: ReminderCandidate) {
-  return and(
-    eq(reminderSettings.userId, reminder.userId),
-    eq(reminderSettings.isEnabled, true),
-    eq(reminderSettings.reminderTime, reminder.reminderTime),
-    eq(reminderSettings.timezone, reminder.timezone),
-    reminder.nextReminderAt === null
-      ? isNull(reminderSettings.nextReminderAt)
-      : eq(reminderSettings.nextReminderAt, reminder.nextReminderAt),
-  );
-}
+export type { ReminderCandidate } from "./reminder-operations";
 
 /** A bounded batch of reminders whose persisted UTC occurrence may be due. */
 export async function listReminderCandidates(
@@ -197,7 +185,13 @@ export async function scheduleNextReminder(
   await db
     .update(reminderSettings)
     .set({ nextReminderAt: nextAt, updatedAt: new Date() })
-    .where(matchesCandidateSchedule(reminder));
+    .where(reminderScheduleCondition(reminder));
+}
+
+export async function disableInvalidReminder(
+  reminder: ReminderCandidate,
+): Promise<boolean> {
+  return disableInvalidReminderSchedule(db, reminder);
 }
 
 /**
@@ -213,7 +207,7 @@ export async function claimReminderDelivery(
     .set({ lastSentLocalDate: localDate, updatedAt: new Date() })
     .where(
       and(
-        matchesCandidateSchedule(reminder),
+        reminderScheduleCondition(reminder),
         or(
           isNull(reminderSettings.lastSentLocalDate),
           ne(reminderSettings.lastSentLocalDate, localDate),
@@ -239,7 +233,7 @@ export async function releaseReminderDelivery(
     })
     .where(
       and(
-        matchesCandidateSchedule(reminder),
+        reminderScheduleCondition(reminder),
         eq(reminderSettings.lastSentLocalDate, localDate),
       ),
     );
@@ -256,7 +250,7 @@ export async function completeReminderDelivery(
     .set({ nextReminderAt: nextAt, updatedAt: new Date() })
     .where(
       and(
-        matchesCandidateSchedule(reminder),
+        reminderScheduleCondition(reminder),
         eq(reminderSettings.lastSentLocalDate, localDate),
       ),
     );

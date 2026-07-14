@@ -83,7 +83,7 @@ This is the deliberate replacement for the PRD's Postgres RLS. See `docs/DEVIATI
 ### Data-access submodules (`src/server/data/`)
 
 `profile`, `behaviors`, `outcomes`, `tags`, `entries`, `checkins`, `checkin-writes`, `history`, `analytics`, `starter`, `notifications`, `account`, `account-ops`, plus `session`/`errors` helpers.
-`checkin-writes.ts` and `account-ops.ts` are kept **session-free** on purpose so integration tests can exercise them against a scratch libSQL/Turso target without the Next runtime.
+The `*-operations.ts` modules are kept **session-free** on purpose so integration tests can exercise atomic data operations against a scratch libSQL/Turso target without the Next runtime.
 
 ### Auth flow
 

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { nextReminderAt, reminderOccurrence } from "@/lib/reminders";
+import {
+  evaluateReminder,
+  nextReminderAt,
+  reminderOccurrence,
+} from "@/lib/reminders";
 
 test("calculates the next reminder in the user's timezone", () => {
   assert.equal(
@@ -34,4 +38,17 @@ test("uses the first valid wall-clock time after a daylight-saving gap", () => {
     reminderOccurrence("2026-03-08", "02:30", "America/Los_Angeles").toISOString(),
     "2026-03-08T10:00:00.000Z",
   );
+});
+
+test("delivers a skipped spring-forward wall time at its resolved occurrence", () => {
+  const evaluation = evaluateReminder(
+    "02:30",
+    "America/Los_Angeles",
+    new Date("2026-03-08T10:00:00.000Z"),
+    10,
+  );
+
+  assert.equal(evaluation.due, true);
+  assert.equal(evaluation.localDate, "2026-03-08");
+  assert.equal(evaluation.nextAt.toISOString(), "2026-03-09T09:30:00.000Z");
 });

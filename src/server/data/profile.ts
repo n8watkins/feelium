@@ -3,9 +3,10 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { profiles, users } from "@/db/schema";
+import { profiles } from "@/db/schema";
 import { isValidTimeZone } from "@/lib/date";
 import { StaleSessionError } from "./errors";
+import { ensureProfileForUser, syncProfileTimeZone } from "./profile-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -17,22 +18,11 @@ import { requireUserId } from "./session";
  * raise StaleSessionError so the layout can sign the request out cleanly instead of
  * crashing with a foreign-key error.
  */
-export async function ensureProfile(): Promise<void> {
+export async function ensureProfile() {
   const userId = await requireUserId();
-
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  if (!user) {
-    throw new StaleSessionError();
-  }
-
-  await db
-    .insert(profiles)
-    .values({ userId, autoSyncTimezone: true })
-    .onConflictDoNothing();
+  const profile = await ensureProfileForUser(db, userId);
+  if (!profile) throw new StaleSessionError();
+  return profile;
 }
 
 export async function getCurrentProfile() {
@@ -75,8 +65,5 @@ export async function updateProfilePreferences(
 export async function updateProfileTimeZone(timezone: string): Promise<void> {
   if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
   const userId = await requireUserId();
-  await db
-    .update(profiles)
-    .set({ timezone, autoSyncTimezone: false, updatedAt: new Date() })
-    .where(eq(profiles.userId, userId));
+  await syncProfileTimeZone(db, userId, timezone);
 }
