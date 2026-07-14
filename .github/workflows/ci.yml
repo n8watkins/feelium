@@ -33,6 +33,8 @@ jobs:
         run: npm run typecheck
       - name: Run unit tests
         run: npm test
+      - name: Test atomic data operations
+        run: npm run test:data-operations
       - name: Test fresh and legacy database migrations
         run: npm run test:migrations
       - name: Install Turso CLI
