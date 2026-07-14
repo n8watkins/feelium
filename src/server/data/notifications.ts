@@ -138,6 +138,18 @@ export type ReminderCandidate = {
   nextReminderAt: Date | null;
 };
 
+function matchesCandidateSchedule(reminder: ReminderCandidate) {
+  return and(
+    eq(reminderSettings.userId, reminder.userId),
+    eq(reminderSettings.isEnabled, true),
+    eq(reminderSettings.reminderTime, reminder.reminderTime),
+    eq(reminderSettings.timezone, reminder.timezone),
+    reminder.nextReminderAt === null
+      ? isNull(reminderSettings.nextReminderAt)
+      : eq(reminderSettings.nextReminderAt, reminder.nextReminderAt),
+  );
+}
+
 /** A bounded batch of reminders whose persisted UTC occurrence may be due. */
 export async function listReminderCandidates(
   now: Date,
@@ -178,25 +190,30 @@ export async function listReminderCandidates(
 }
 
 /** Advances a candidate that is stale or not yet due to its next UTC occurrence. */
-export async function scheduleNextReminder(userId: string, nextAt: Date): Promise<void> {
+export async function scheduleNextReminder(
+  reminder: ReminderCandidate,
+  nextAt: Date,
+): Promise<void> {
   await db
     .update(reminderSettings)
     .set({ nextReminderAt: nextAt, updatedAt: new Date() })
-    .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
+    .where(matchesCandidateSchedule(reminder));
 }
 
 /**
  * Atomically reserves one reminder delivery for a user's local calendar date.
  * Only one overlapping cron invocation can receive a successful claim.
  */
-export async function claimReminderDelivery(userId: string, localDate: string): Promise<boolean> {
+export async function claimReminderDelivery(
+  reminder: ReminderCandidate,
+  localDate: string,
+): Promise<boolean> {
   const rows = await db
     .update(reminderSettings)
     .set({ lastSentLocalDate: localDate, updatedAt: new Date() })
     .where(
       and(
-        eq(reminderSettings.userId, userId),
-        eq(reminderSettings.isEnabled, true),
+        matchesCandidateSchedule(reminder),
         or(
           isNull(reminderSettings.lastSentLocalDate),
           ne(reminderSettings.lastSentLocalDate, localDate),
@@ -208,13 +225,21 @@ export async function claimReminderDelivery(userId: string, localDate: string): 
 }
 
 /** Allows a later cron invocation to retry after an entirely transient delivery failure. */
-export async function releaseReminderDelivery(userId: string, localDate: string): Promise<void> {
+export async function releaseReminderDelivery(
+  reminder: ReminderCandidate,
+  localDate: string,
+  retryAt: Date,
+): Promise<void> {
   await db
     .update(reminderSettings)
-    .set({ lastSentLocalDate: null, updatedAt: new Date() })
+    .set({
+      lastSentLocalDate: null,
+      nextReminderAt: retryAt,
+      updatedAt: new Date(),
+    })
     .where(
       and(
-        eq(reminderSettings.userId, userId),
+        matchesCandidateSchedule(reminder),
         eq(reminderSettings.lastSentLocalDate, localDate),
       ),
     );
@@ -222,7 +247,7 @@ export async function releaseReminderDelivery(userId: string, localDate: string)
 
 /** Marks the claimed local date complete and advances its persisted UTC schedule. */
 export async function completeReminderDelivery(
-  userId: string,
+  reminder: ReminderCandidate,
   localDate: string,
   nextAt: Date,
 ): Promise<void> {
@@ -231,7 +256,7 @@ export async function completeReminderDelivery(
     .set({ nextReminderAt: nextAt, updatedAt: new Date() })
     .where(
       and(
-        eq(reminderSettings.userId, userId),
+        matchesCandidateSchedule(reminder),
         eq(reminderSettings.lastSentLocalDate, localDate),
       ),
     );

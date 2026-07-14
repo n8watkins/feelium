@@ -71,7 +71,7 @@ One-minute Vercel Cron schedules require Vercel Pro or higher.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If the current wall-clock time in a candidate's saved timezone is within `window` minutes of its reminder time (default 10), the job pushes the gentle reminder to all subscribed devices.
 - Each user's delivery is atomically claimed once per local calendar date, so overlapping or retried cron invocations do not send duplicates.
-- Fully transient failures release the claim and remain eligible throughout the delivery window.
+- Fully transient failures release the claim and move one minute later in the due queue, remaining eligible throughout the delivery window without starving other candidates.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 

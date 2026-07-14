@@ -25,7 +25,7 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
  *   { "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }] }
  *
  * For each user with the reminder enabled, if the current wall-clock time in their saved
- * timezone matches their reminder time (within `window` minutes, default 1), we push the
+ * timezone matches their reminder time (within `window` minutes, default 10), we push the
  * gentle daily reminder to all of their subscribed devices and prune any that are gone.
  *
  * Manual/local testing (no cloud):
@@ -146,7 +146,7 @@ async function handle(request: NextRequest) {
   let claimedUsers = 0;
   const notDue = evaluated.filter((reminder) => !reminder.due);
   await Promise.all(
-    notDue.map((reminder) => scheduleNextReminder(reminder.userId, reminder.nextAt)),
+    notDue.map((reminder) => scheduleNextReminder(reminder, reminder.nextAt)),
   );
 
   async function sendForUser(reminder: (typeof due)[number]) {
@@ -155,9 +155,9 @@ async function handle(request: NextRequest) {
     let userFailed = 0;
     let claimed = false;
     try {
-      claimed = await claimReminderDelivery(reminder.userId, reminder.localDate);
+      claimed = await claimReminderDelivery(reminder, reminder.localDate);
       if (!claimed) {
-        await scheduleNextReminder(reminder.userId, reminder.nextAt);
+        await scheduleNextReminder(reminder, reminder.nextAt);
         return;
       }
       claimedUsers += 1;
@@ -191,9 +191,13 @@ async function handle(request: NextRequest) {
     if (!claimed) return;
     try {
       if (userFailed > 0 && userSent === 0 && userPruned === 0) {
-        await releaseReminderDelivery(reminder.userId, reminder.localDate);
+        await releaseReminderDelivery(
+          reminder,
+          reminder.localDate,
+          new Date(Date.now() + 60_000),
+        );
       } else {
-        await completeReminderDelivery(reminder.userId, reminder.localDate, reminder.nextAt);
+        await completeReminderDelivery(reminder, reminder.localDate, reminder.nextAt);
       }
     } catch {
       failed += 1;

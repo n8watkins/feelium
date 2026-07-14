@@ -31,7 +31,7 @@ export default async function LoginPage({
   const { error, next } = await searchParams;
 
   // NOTE: Email/password + magic-link sign-in are temporarily disabled - GitHub OAuth is
-  // the only provider "atm" (see the re-enable note in src/auth.ts). The corresponding
+  // currently the only provider (see the re-enable note in src/auth.ts). The corresponding
   // fields, magic-link status, and create-account flow were removed from this page; the
   // server actions still live in ./actions, so restoring the UI is the only step here.
   return (

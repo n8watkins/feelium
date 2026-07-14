@@ -84,11 +84,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
     //       typeof credentials?.email === "string" ? credentials.email : "";
     //     const password =
     //       typeof credentials?.password === "string" ? credentials.password : "";
-    //     if (!email || !password) return null;
-    //
-    //     const [user] = await db
-    //       .select()
-    //       .from(users)
+//     if (!email || !password) return null;
+//
+//     const [user] = await getDb()
+//       .select()
+//       .from(users)
     //       .where(eq(users.email, email))
     //       .limit(1);
     //
