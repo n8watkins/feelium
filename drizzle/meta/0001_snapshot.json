@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "def68487-6ea3-461b-8252-56503f1a6804",
+  "id": "d7c63813-b9b0-4e08-a06a-d71fbb183e63",
   "prevId": "c9b77cb9-7af4-4748-90f8-9188f6487023",
   "tables": {
     "account": {
@@ -382,22 +382,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "behavior_name_length_ck": {
-          "name": "behavior_name_length_ck",
-          "value": "length(\"behavior\".\"name\") between 1 and 100"
-        },
-        "behavior_description_length_ck": {
-          "name": "behavior_description_length_ck",
-          "value": "\"behavior\".\"description\" is null or length(\"behavior\".\"description\") <= 1000"
-        },
-        "behavior_unit_length_ck": {
-          "name": "behavior_unit_length_ck",
-          "value": "\"behavior\".\"unit\" is null or length(\"behavior\".\"unit\") <= 40"
-        },
-        "behavior_prompt_length_ck": {
-          "name": "behavior_prompt_length_ck",
-          "value": "\"behavior\".\"custom_prompt\" is null or length(\"behavior\".\"custom_prompt\") <= 1000"
-        },
         "behavior_input_type_ck": {
           "name": "behavior_input_type_ck",
           "value": "\"behavior\".\"input_type\" in ('boolean', 'numeric')"
@@ -606,14 +590,6 @@
         "check_in_value_rating_range_ck": {
           "name": "check_in_value_rating_range_ck",
           "value": "\"check_in_value\".\"rating_value\" is null or \"check_in_value\".\"rating_value\" between 1 and 5"
-        },
-        "check_in_value_shape_ck": {
-          "name": "check_in_value_shape_ck",
-          "value": "(\"check_in_value\".\"rating_value\" is not null) + (\"check_in_value\".\"boolean_value\" is not null) + (\"check_in_value\".\"numeric_value\" is not null) = 1"
-        },
-        "check_in_value_numeric_ck": {
-          "name": "check_in_value_numeric_ck",
-          "value": "\"check_in_value\".\"numeric_value\" is null or (\"check_in_value\".\"numeric_value\" >= 0 and \"check_in_value\".\"numeric_value\" <= 1000000000)"
         }
       }
     },
@@ -705,16 +681,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "check_in_local_date_ck": {
-          "name": "check_in_local_date_ck",
-          "value": "length(\"check_in\".\"local_date\") = 10 and \"check_in\".\"local_date\" glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
-        },
-        "check_in_note_length_ck": {
-          "name": "check_in_note_length_ck",
-          "value": "\"check_in\".\"note\" is null or length(\"check_in\".\"note\") <= 5000"
-        }
-      }
+      "checkConstraints": {}
     },
     "daily_behavior_entry": {
       "name": "daily_behavior_entry",
@@ -825,20 +792,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "daily_behavior_entry_date_ck": {
-          "name": "daily_behavior_entry_date_ck",
-          "value": "length(\"daily_behavior_entry\".\"entry_date\") = 10 and \"daily_behavior_entry\".\"entry_date\" glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"
-        },
-        "daily_behavior_entry_value_ck": {
-          "name": "daily_behavior_entry_value_ck",
-          "value": "(\"daily_behavior_entry\".\"boolean_value\" is not null) + (\"daily_behavior_entry\".\"numeric_value\" is not null) = 1"
-        },
-        "daily_behavior_entry_numeric_ck": {
-          "name": "daily_behavior_entry_numeric_ck",
-          "value": "\"daily_behavior_entry\".\"numeric_value\" is null or (\"daily_behavior_entry\".\"numeric_value\" >= 0 and \"daily_behavior_entry\".\"numeric_value\" <= 1000000000)"
-        }
-      }
+      "checkConstraints": {}
     },
     "outcome_metric": {
       "name": "outcome_metric",
@@ -958,18 +912,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "outcome_metric_name_length_ck": {
-          "name": "outcome_metric_name_length_ck",
-          "value": "length(\"outcome_metric\".\"name\") between 1 and 100"
-        },
-        "outcome_metric_description_length_ck": {
-          "name": "outcome_metric_description_length_ck",
-          "value": "\"outcome_metric\".\"description\" is null or length(\"outcome_metric\".\"description\") <= 1000"
-        },
-        "outcome_metric_unit_length_ck": {
-          "name": "outcome_metric_unit_length_ck",
-          "value": "\"outcome_metric\".\"unit\" is null or length(\"outcome_metric\".\"unit\") <= 40"
-        },
         "outcome_metric_input_type_ck": {
           "name": "outcome_metric_input_type_ck",
           "value": "\"outcome_metric\".\"input_type\" in ('rating', 'boolean', 'numeric')"
@@ -1175,6 +1117,13 @@
           "autoincrement": false,
           "default": "'UTC'"
         },
+        "last_sent_local_date": {
+          "name": "last_sent_local_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1277,12 +1226,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "tag_name_length_ck": {
-          "name": "tag_name_length_ck",
-          "value": "length(\"tag\".\"name\") between 1 and 100"
-        }
-      }
+      "checkConstraints": {}
     }
   },
   "views": {},

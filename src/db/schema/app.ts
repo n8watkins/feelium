@@ -83,19 +83,6 @@ export const behaviors = sqliteTable(
   },
   (t) => [
     index("behavior_user_sort_idx").on(t.userId, t.sortOrder),
-    check("behavior_name_length_ck", sql`length(${t.name}) between 1 and 100`),
-    check(
-      "behavior_description_length_ck",
-      sql`${t.description} is null or length(${t.description}) <= 1000`,
-    ),
-    check(
-      "behavior_unit_length_ck",
-      sql`${t.unit} is null or length(${t.unit}) <= 40`,
-    ),
-    check(
-      "behavior_prompt_length_ck",
-      sql`${t.customPrompt} is null or length(${t.customPrompt}) <= 1000`,
-    ),
     check("behavior_input_type_ck", sql`${t.inputType} in ('boolean', 'numeric')`),
     check(
       "behavior_direction_ck",
@@ -133,18 +120,6 @@ export const dailyBehaviorEntries = sqliteTable(
       t.entryDate,
     ),
     index("daily_behavior_entry_user_date_idx").on(t.userId, t.entryDate),
-    check(
-      "daily_behavior_entry_date_ck",
-      sql`length(${t.entryDate}) = 10 and ${t.entryDate} glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
-    ),
-    check(
-      "daily_behavior_entry_value_ck",
-      sql`(${t.booleanValue} is not null) + (${t.numericValue} is not null) = 1`,
-    ),
-    check(
-      "daily_behavior_entry_numeric_ck",
-      sql`${t.numericValue} is null or (${t.numericValue} >= 0 and ${t.numericValue} <= 1000000000)`,
-    ),
   ],
 );
 
@@ -171,15 +146,6 @@ export const outcomeMetrics = sqliteTable(
   },
   (t) => [
     index("outcome_metric_user_sort_idx").on(t.userId, t.sortOrder),
-    check("outcome_metric_name_length_ck", sql`length(${t.name}) between 1 and 100`),
-    check(
-      "outcome_metric_description_length_ck",
-      sql`${t.description} is null or length(${t.description}) <= 1000`,
-    ),
-    check(
-      "outcome_metric_unit_length_ck",
-      sql`${t.unit} is null or length(${t.unit}) <= 40`,
-    ),
     check(
       "outcome_metric_input_type_ck",
       sql`${t.inputType} in ('rating', 'boolean', 'numeric')`,
@@ -213,14 +179,6 @@ export const checkIns = sqliteTable(
   (t) => [
     index("check_in_user_local_date_idx").on(t.userId, t.localDate),
     index("check_in_user_occurred_idx").on(t.userId, t.occurredAt),
-    check(
-      "check_in_local_date_ck",
-      sql`length(${t.localDate}) = 10 and ${t.localDate} glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
-    ),
-    check(
-      "check_in_note_length_ck",
-      sql`${t.note} is null or length(${t.note}) <= 5000`,
-    ),
   ],
 );
 
@@ -254,14 +212,6 @@ export const checkInValues = sqliteTable(
       "check_in_value_rating_range_ck",
       sql`${t.ratingValue} is null or ${t.ratingValue} between 1 and 5`,
     ),
-    check(
-      "check_in_value_shape_ck",
-      sql`(${t.ratingValue} is not null) + (${t.booleanValue} is not null) + (${t.numericValue} is not null) = 1`,
-    ),
-    check(
-      "check_in_value_numeric_ck",
-      sql`${t.numericValue} is null or (${t.numericValue} >= 0 and ${t.numericValue} <= 1000000000)`,
-    ),
   ],
 );
 
@@ -277,10 +227,7 @@ export const tags = sqliteTable(
     name: text("name").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [
-    unique("tag_unique_name_per_user").on(t.userId, t.name),
-    check("tag_name_length_ck", sql`length(${t.name}) between 1 and 100`),
-  ],
+  (t) => [unique("tag_unique_name_per_user").on(t.userId, t.name)],
 );
 
 export const checkInTags = sqliteTable(
