@@ -20,7 +20,6 @@ const nextConfig: NextConfig = {
     "@libsql/client",
     "bcryptjs",
     "@auth/drizzle-adapter",
-    "nodemailer",
   ],
   async headers() {
     return [
