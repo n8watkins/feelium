@@ -8,29 +8,8 @@ import type { NextConfig } from "next";
 // `outputFileTracingRoot` (server output tracing) are pinned to `__dirname` so the app
 // always resolves against its own node_modules.
 const appRoot = __dirname;
-const isDev = process.env.NODE_ENV === "development";
-export function buildContentSecurityPolicy(development: boolean) {
-  return [
-    "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    `connect-src 'self'${development ? " ws: http:" : ""}`,
-    "worker-src 'self' blob:",
-    "manifest-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    ...(development ? [] : ["upgrade-insecure-requests"]),
-  ].join("; ");
-}
-
-const contentSecurityPolicy = buildContentSecurityPolicy(isDev);
 
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
