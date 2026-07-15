@@ -122,7 +122,7 @@ Full setup is in `README.md`; the short version:
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
-Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:categories`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
+Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:categories`, `test:e2e`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
 
 ---
 
@@ -232,7 +232,7 @@ These are intentionally out of scope for the MVP and should only be built once t
 - **Production has no seed/demo data.** Turso in prod starts empty; every account is a fresh GitHub sign-in. `npm run db:seed` is local-only.
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).
 - **Offline data entry is out of scope** for this MVP by design (PRD 18). The service worker caches assets, not HTML.
-- **Browser automation requires an auth setup.** Supply a disposable `AUTH_SECRET` and an authenticated test session before verifying protected routes.
+- **Browser automation uses a disposable authenticated session.** `npm run test:e2e` resets `.data/e2e.db`, migrates and seeds it, signs an Auth.js test JWT, and exercises protected routes in Chromium without enabling a production login method.
 - **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, validation, and security headers; integration tests cover behavior categories, multi-reminder ownership and delivery, atomic data operations, fresh and legacy migrations, plus real Turso HTTP persistence.
 
 ---
@@ -244,4 +244,4 @@ Small, high-value polishes (listed, not implemented):
 - **Whole-number stepper for integer units** (e.g. cups) to avoid decimal input where it makes no sense.
 - **Ship a favicon.ico.** `config/branding.ts` references `/favicon.ico`, but only `icon.svg` and the PNGs exist in `public/`.
 - **Point at a custom domain** and update `AUTH_URL` + the GitHub OAuth callback, retiring the `-sandy` suffix.
-- **Add a lightweight smoke/E2E test** for the core loop (sign in, add behavior, check in, see it in history/insights) so regressions surface without a real browser.
+- **Expand the authenticated E2E suite** to cover the full check-in, History, and Insights loop.
