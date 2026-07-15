@@ -15,6 +15,7 @@
     "db:studio": "drizzle-kit studio",
     "db:reset": "rm -f .data/local.db .data/local.db-shm .data/local.db-wal && drizzle-kit migrate",
     "test:data-operations": "tsx --test tests/review-findings.integration.test.ts",
+    "test:categories": "tsx --test tests/categories.integration.test.ts",
     "test:migrations": "tsx --test tests/migrations.integration.test.ts",
     "test:persistence": "tsx tests/checkin-persistence.test.ts",
     "test:persistence:local": "bash scripts/test-persistence-local.sh"

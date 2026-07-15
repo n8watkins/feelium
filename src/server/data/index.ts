@@ -8,6 +8,7 @@ import "server-only";
 // session) used only by the guarded reminder-send job; they take a userId directly.
 export * from "./profile";
 export * from "./behaviors";
+export * from "./categories";
 export * from "./outcomes";
 export * from "./tags";
 export * from "./entries";

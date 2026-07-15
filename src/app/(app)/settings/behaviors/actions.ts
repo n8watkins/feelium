@@ -26,6 +26,7 @@ import {
 const LIST_PATH = "/settings/behaviors";
 
 type BehaviorValues = {
+  categoryId: string;
   name: string;
   inputType: string;
   desiredDirection: string;
@@ -45,6 +46,7 @@ function parseBehavior(
   | { ok: true; input: BehaviorInput; values: BehaviorValues }
   | { ok: false; errors: Record<string, string>; values: BehaviorValues } {
   const values: BehaviorValues = {
+    categoryId: String(formData.get("categoryId") ?? ""),
     name: String(formData.get("name") ?? "").trim(),
     inputType: String(formData.get("inputType") ?? ""),
     desiredDirection: String(formData.get("desiredDirection") ?? ""),
@@ -83,6 +85,7 @@ function parseBehavior(
     ok: true,
     values,
     input: {
+      categoryId: values.categoryId || null,
       name: values.name,
       inputType: values.inputType,
       desiredDirection: values.desiredDirection,

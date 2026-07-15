@@ -57,6 +57,41 @@ test("migrations create a fresh database", async () => {
 
     const profileColumns = await client.execute("pragma table_info(profile)");
     assert.ok(profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"));
+
+    const categoryColumns = await client.execute("pragma table_info(behavior_category)");
+    assert.deepEqual(
+      categoryColumns.rows.map((row) => row.name),
+      [
+        "id",
+        "user_id",
+        "name",
+        "normalized_name",
+        "color",
+        "sort_order",
+        "created_at",
+        "updated_at",
+      ],
+    );
+    const behaviorColumns = await client.execute("pragma table_info(behavior)");
+    assert.ok(behaviorColumns.rows.map((row) => row.name).includes("category_id"));
+
+    await client.batch(
+      [
+        "insert into user (id, email) values ('category-user', 'category@example.test')",
+        `insert into behavior_category
+          (id, user_id, name, normalized_name, color, created_at, updated_at)
+          values ('category', 'category-user', 'Health', 'health', 'blue', 1, 1)`,
+        `insert into behavior
+          (id, user_id, category_id, name, input_type, desired_direction, created_at, updated_at)
+          values ('categorized', 'category-user', 'category', 'Walk', 'boolean', 'increase', 1, 1)`,
+        "delete from behavior_category where id = 'category'",
+      ],
+      "write",
+    );
+    const uncategorized = await client.execute(
+      "select category_id from behavior where id = 'categorized'",
+    );
+    assert.equal(uncategorized.rows[0]?.category_id, null);
   } finally {
     client.close();
     await rm(root, { recursive: true, force: true });
@@ -102,6 +137,10 @@ test("migrations preserve legacy rows that exceed current application limits", a
       "select auto_sync_timezone from profile where user_id = 'legacy-user'",
     );
     assert.equal(Number(profileDefault.rows[0]?.auto_sync_timezone), 0);
+    const migratedBehavior = await client.execute(
+      "select category_id from behavior where id = 'legacy-behavior'",
+    );
+    assert.equal(migratedBehavior.rows[0]?.category_id, null);
     assert.equal((await client.execute("pragma foreign_key_check")).rows.length, 0);
   } finally {
     client.close();

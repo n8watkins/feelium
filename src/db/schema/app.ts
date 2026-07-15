@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 import { users } from "./auth";
+import type { BehaviorCategoryColor } from "@/config/behavior-categories";
 
 /**
  * Application schema (PRD section 22), mapped to SQLite/libSQL.
@@ -65,6 +66,35 @@ export const profiles = sqliteTable(
   (t) => [check("profile_week_starts_on_ck", sql`${t.weekStartsOn} between 0 and 6`)],
 );
 
+export const behaviorCategories = sqliteTable(
+  "behavior_category",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    color: text("color").$type<BehaviorCategoryColor>().notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("behavior_category_unique_name_per_user").on(
+      t.userId,
+      t.normalizedName,
+    ),
+    index("behavior_category_user_sort_idx").on(t.userId, t.sortOrder),
+    check(
+      "behavior_category_color_ck",
+      sql`${t.color} in ('blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'purple', 'indigo', 'slate')`,
+    ),
+  ],
+);
+
 export const behaviors = sqliteTable(
   "behavior",
   {
@@ -74,6 +104,9 @@ export const behaviors = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: text("category_id").references(() => behaviorCategories.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     description: text("description"),
     inputType: text("input_type").$type<BehaviorInputType>().notNull(),
@@ -92,6 +125,10 @@ export const behaviors = sqliteTable(
     check(
       "behavior_direction_ck",
       sql`${t.desiredDirection} in ('increase', 'reduce', 'neutral')`,
+    ),
+    check(
+      "behavior_category_id_ck",
+      sql`${t.categoryId} is null or length(${t.categoryId}) > 0`,
     ),
   ],
 );

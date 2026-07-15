@@ -10,9 +10,11 @@ import {
   type BehaviorInputType,
 } from "@/db/schema";
 import { InputTypeLockedError } from "./errors";
+import { resolveOwnedBehaviorCategoryId } from "./behavior-category-operations";
 import { requireUserId } from "./session";
 
 export type BehaviorInput = {
+  categoryId: string | null;
   name: string;
   inputType: BehaviorInputType;
   desiredDirection: BehaviorDirection;
@@ -76,10 +78,11 @@ async function nextActiveSortOrder(userId: string): Promise<number> {
 
 export async function createBehavior(input: BehaviorInput) {
   const userId = await requireUserId();
+  const categoryId = await resolveOwnedBehaviorCategoryId(db, userId, input.categoryId);
   const sortOrder = await nextActiveSortOrder(userId);
   const [row] = await db
     .insert(behaviors)
-    .values({ userId, sortOrder, ...input })
+    .values({ userId, sortOrder, ...input, categoryId })
     .returning();
   return row;
 }
@@ -92,6 +95,7 @@ export async function updateBehavior(id: string, input: BehaviorInput) {
   const userId = await requireUserId();
   const existing = await getBehavior(id);
   if (!existing) throw new Error("NOT_FOUND");
+  const categoryId = await resolveOwnedBehaviorCategoryId(db, userId, input.categoryId);
 
   if (input.inputType !== existing.inputType && (await behaviorHasEntries(id))) {
     throw new InputTypeLockedError();
@@ -106,6 +110,7 @@ export async function updateBehavior(id: string, input: BehaviorInput) {
       unit: input.unit,
       description: input.description,
       customPrompt: input.customPrompt,
+      categoryId,
     })
     .where(and(eq(behaviors.id, id), eq(behaviors.userId, userId)));
 }

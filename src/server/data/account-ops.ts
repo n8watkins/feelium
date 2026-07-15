@@ -5,6 +5,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import {
   accounts,
+  behaviorCategories,
   behaviors,
   checkInTags,
   checkInValues,
@@ -54,6 +55,7 @@ export type UserDataExport = {
     updatedAt: Date;
   } | null;
   behaviors: (typeof behaviors.$inferSelect)[];
+  behaviorCategories: (typeof behaviorCategories.$inferSelect)[];
   dailyBehaviorEntries: (typeof dailyBehaviorEntries.$inferSelect)[];
   outcomeMetrics: (typeof outcomeMetrics.$inferSelect)[];
   checkIns: (typeof checkIns.$inferSelect)[];
@@ -77,6 +79,7 @@ export async function exportUserDataForUser(
   const [
     user,
     profile,
+    categories,
     userBehaviors,
     entries,
     metrics,
@@ -93,6 +96,11 @@ export async function exportUserDataForUser(
       .where(eq(users.id, userId))
       .limit(1),
     database.select().from(profiles).where(eq(profiles.userId, userId)).limit(1),
+    database
+      .select()
+      .from(behaviorCategories)
+      .where(eq(behaviorCategories.userId, userId))
+      .orderBy(asc(behaviorCategories.sortOrder), asc(behaviorCategories.createdAt)),
     database
       .select()
       .from(behaviors)
@@ -144,7 +152,7 @@ export async function exportUserDataForUser(
   return {
     exportedAt: nowIso,
     app: "feelium",
-    formatVersion: 1,
+    formatVersion: 2,
     account: user[0] ?? { id: userId, email: null, name: null },
     profile: profile[0]
       ? {
@@ -156,6 +164,7 @@ export async function exportUserDataForUser(
         }
       : null,
     behaviors: userBehaviors,
+    behaviorCategories: categories,
     dailyBehaviorEntries: entries,
     outcomeMetrics: metrics,
     checkIns: userCheckIns,
@@ -192,6 +201,7 @@ function trackingDeletes(
     database.delete(checkIns).where(eq(checkIns.userId, userId)),
     database.delete(dailyBehaviorEntries).where(eq(dailyBehaviorEntries.userId, userId)),
     database.delete(behaviors).where(eq(behaviors.userId, userId)),
+    database.delete(behaviorCategories).where(eq(behaviorCategories.userId, userId)),
     database.delete(outcomeMetrics).where(eq(outcomeMetrics.userId, userId)),
     database.delete(tags).where(eq(tags.userId, userId)),
     database.delete(reminderSettings).where(eq(reminderSettings.userId, userId)),
