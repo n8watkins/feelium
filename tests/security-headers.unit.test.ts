@@ -34,6 +34,9 @@ test("production scripts require the request nonce", () => {
 
 test("production styles allow only nonced elements, Sonner, and style attributes", async () => {
   const policy = buildContentSecurityPolicy("style-request-nonce", false);
+  const scriptPolicy = policy
+    .split("; ")
+    .find((directive) => directive.startsWith("script-src"));
   const sonnerModule = await readFile("node_modules/sonner/dist/index.mjs", "utf8");
   const insertedCss = sonnerModule.match(
     /__insertCSS\(("(?:\\.|[^"])*")\);/,
@@ -49,21 +52,20 @@ test("production styles allow only nonced elements, Sonner, and style attributes
     ),
   );
   assert.match(policy, /style-src-attr 'unsafe-inline'/);
-  assert.doesNotMatch(
-    policy.split("; ").find((directive) => directive.startsWith("script-src")),
-    /'unsafe-inline'/,
-  );
+  assert.ok(scriptPolicy);
+  assert.doesNotMatch(scriptPolicy, /'unsafe-inline'/);
 });
 
 test("development supports local HTTP assets without weakening script nonces", () => {
   const policy = buildContentSecurityPolicy("local-request-nonce", true);
+  const scriptPolicy = policy
+    .split("; ")
+    .find((directive) => directive.startsWith("script-src"));
 
   assert.match(policy, /script-src [^;]*'nonce-local-request-nonce'/);
   assert.match(policy, /script-src [^;]*'unsafe-eval'/);
-  assert.doesNotMatch(
-    policy.split("; ").find((directive) => directive.startsWith("script-src")),
-    /'unsafe-inline'/,
-  );
+  assert.ok(scriptPolicy);
+  assert.doesNotMatch(scriptPolicy, /'unsafe-inline'/);
   assert.match(policy, /connect-src 'self' ws: http:/);
 });
 
@@ -80,12 +82,13 @@ test("proxy forwards one nonce policy to Next.js and the browser", async () => {
   const renderPolicy = response.headers.get(
     "x-middleware-request-content-security-policy",
   );
+  const scriptPolicy = browserPolicy
+    ?.split("; ")
+    .find((directive) => directive.startsWith("script-src"));
 
   assert.ok(browserPolicy);
   assert.equal(renderPolicy, browserPolicy);
   assert.match(browserPolicy, /script-src [^;]*'nonce-[^']+'/);
-  assert.doesNotMatch(
-    browserPolicy.split("; ").find((directive) => directive.startsWith("script-src")),
-    /'unsafe-inline'/,
-  );
+  assert.ok(scriptPolicy);
+  assert.doesNotMatch(scriptPolicy, /'unsafe-inline'/);
 });

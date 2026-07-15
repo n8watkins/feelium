@@ -40,7 +40,7 @@ test("Sonner theme variables come from CSP-compatible application CSS", async ()
 
   assert.match(component, /className="toaster group"/);
   assert.doesNotMatch(component, /\sstyle=/);
-  assert.match(css, /\.toaster\s*\{[^}]*--normal-bg: var\(--popover\)/s);
+  assert.match(css, /\.toaster\s*\{[\s\S]*?--normal-bg: var\(--popover\)/);
   assert.match(css, /--normal-text: var\(--popover-foreground\)/);
   assert.match(css, /--normal-border: var\(--border\)/);
   assert.match(css, /--border-radius: var\(--radius\)/);
