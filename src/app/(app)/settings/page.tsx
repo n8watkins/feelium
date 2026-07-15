@@ -13,6 +13,7 @@ import type { LucideIcon } from "lucide-react";
 import { auth } from "@/auth";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PageHeader } from "@/components/page-header";
+import { PreferencesForm } from "@/components/settings/preferences-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,7 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentProfile } from "@/server/data";
-import { signOut, updatePreferencesAction } from "./actions";
+import { signOut } from "./actions";
 
 const WEEKDAYS = [
   "Sunday",
@@ -81,40 +82,12 @@ export default async function SettingsPage() {
               <span className="text-sm font-medium">Theme</span>
               <ModeToggle />
             </div>
-            <form action={updatePreferencesAction} className="space-y-4 border-t border-border pt-4">
-              <label className="grid gap-1.5 text-sm font-medium">
-                Timezone
-                <select
-                  name="timezone"
-                  defaultValue={profile?.timezone ?? "UTC"}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {!TIMEZONES.includes("UTC") ? <option value="UTC">UTC</option> : null}
-                  {TIMEZONES.map((timezone) => (
-                    <option key={timezone} value={timezone}>
-                      {timezone.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Start of week
-                <select
-                  name="weekStartsOn"
-                  defaultValue={String(profile?.weekStartsOn ?? 1)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {WEEKDAYS.map((day, index) => (
-                    <option key={day} value={index}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button type="submit" variant="outline">
-                Save preferences
-              </Button>
-            </form>
+            <PreferencesForm
+              timezone={profile?.timezone ?? "UTC"}
+              weekStartsOn={profile?.weekStartsOn ?? 1}
+              timezones={TIMEZONES}
+              weekdays={WEEKDAYS}
+            />
           </CardContent>
         </Card>
 

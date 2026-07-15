@@ -6,7 +6,11 @@ import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { isValidTimeZone } from "@/lib/date";
 import { StaleSessionError } from "./errors";
-import { ensureProfileForUser, syncProfileTimeZone } from "./profile-operations";
+import {
+  ensureProfileForUser,
+  syncProfileTimeZone,
+  updateProfilePreferencesForUser,
+} from "./profile-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -50,15 +54,8 @@ export async function updateProfilePreferences(
   }
 
   const userId = await requireUserId();
-  await db
-    .update(profiles)
-    .set({
-      timezone: input.timezone,
-      autoSyncTimezone: false,
-      weekStartsOn: input.weekStartsOn,
-      updatedAt: new Date(),
-    })
-    .where(eq(profiles.userId, userId));
+  const updated = await updateProfilePreferencesForUser(db, userId, input);
+  if (!updated) throw new StaleSessionError();
 }
 
 /** Updates only the timezone detected by the signed-in user's browser. */

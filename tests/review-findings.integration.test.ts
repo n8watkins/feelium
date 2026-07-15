@@ -8,6 +8,7 @@ import * as schema from "@/db/schema";
 import {
   ensureProfileForUser,
   syncProfileTimeZone,
+  updateProfilePreferencesForUser,
 } from "@/server/data/profile-operations";
 import { disableInvalidReminderSchedule } from "@/server/data/reminder-operations";
 import {
@@ -142,6 +143,52 @@ test("background timezone sync cannot overwrite a manual preference", async () =
     assert.equal(updated, false);
     assert.equal(result.rows[0]?.timezone, "Europe/Paris");
     assert.equal(Number(result.rows[0]?.auto_sync_timezone), 0);
+  } finally {
+    client.close();
+  }
+});
+
+test("manual preferences persist only for the selected profile", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('owner', 'owner@example.test')");
+    await client.execute("insert into user (id, email) values ('other', 'other@example.test')");
+    await ensureProfileForUser(database, "owner");
+    await ensureProfileForUser(database, "other");
+
+    assert.equal(
+      await updateProfilePreferencesForUser(database, "owner", {
+        timezone: "America/Los_Angeles",
+        weekStartsOn: 0,
+      }),
+      true,
+    );
+
+    const result = await client.execute(
+      "select user_id, timezone, week_starts_on, auto_sync_timezone from profile order by user_id",
+    );
+    assert.deepEqual(
+      result.rows.map((row) => ({
+        userId: row.user_id,
+        timezone: row.timezone,
+        weekStartsOn: Number(row.week_starts_on),
+        autoSyncTimezone: Number(row.auto_sync_timezone),
+      })),
+      [
+        {
+          userId: "other",
+          timezone: "UTC",
+          weekStartsOn: 1,
+          autoSyncTimezone: 1,
+        },
+        {
+          userId: "owner",
+          timezone: "America/Los_Angeles",
+          weekStartsOn: 0,
+          autoSyncTimezone: 0,
+        },
+      ],
+    );
   } finally {
     client.close();
   }

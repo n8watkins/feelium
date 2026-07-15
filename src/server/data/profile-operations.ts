@@ -37,3 +37,21 @@ export async function syncProfileTimeZone(
     .returning({ userId: profiles.userId });
   return rows.length === 1;
 }
+
+export async function updateProfilePreferencesForUser(
+  database: AppDatabase,
+  userId: string,
+  input: { timezone: string; weekStartsOn: number },
+): Promise<boolean> {
+  const rows = await database
+    .update(profiles)
+    .set({
+      timezone: input.timezone,
+      autoSyncTimezone: false,
+      weekStartsOn: input.weekStartsOn,
+      updatedAt: new Date(),
+    })
+    .where(eq(profiles.userId, userId))
+    .returning({ userId: profiles.userId });
+  return rows.length === 1;
+}
