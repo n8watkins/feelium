@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { NextRequest, type NextFetchEvent } from "next/server";
@@ -28,6 +30,29 @@ test("production scripts require the request nonce", () => {
   );
   assert.doesNotMatch(scriptPolicy, /'unsafe-inline'/);
   assert.doesNotMatch(scriptPolicy, /'unsafe-eval'/);
+});
+
+test("production styles allow only nonced elements, Sonner, and style attributes", async () => {
+  const policy = buildContentSecurityPolicy("style-request-nonce", false);
+  const sonnerModule = await readFile("node_modules/sonner/dist/index.mjs", "utf8");
+  const insertedCss = sonnerModule.match(
+    /__insertCSS\(("(?:\\.|[^"])*")\);/,
+  )?.[1];
+  assert.ok(insertedCss);
+  const sonnerHash = createHash("sha256")
+    .update(JSON.parse(insertedCss) as string)
+    .digest("base64");
+
+  assert.ok(
+    policy.includes(
+      `style-src-elem 'self' 'nonce-style-request-nonce' 'sha256-${sonnerHash}'`,
+    ),
+  );
+  assert.match(policy, /style-src-attr 'unsafe-inline'/);
+  assert.doesNotMatch(
+    policy.split("; ").find((directive) => directive.startsWith("script-src")),
+    /'unsafe-inline'/,
+  );
 });
 
 test("development supports local HTTP assets without weakening script nonces", () => {

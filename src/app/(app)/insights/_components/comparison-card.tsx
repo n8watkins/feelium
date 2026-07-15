@@ -5,6 +5,7 @@ import {
   formatOutcomeAverage,
   type Comparison,
 } from "@/lib/analytics";
+import { ProportionalBar } from "./proportional-bar";
 
 /**
  * Behavior-to-outcome comparison card (PRD 16.4) - the key MVP feature. Leads with the
@@ -113,10 +114,7 @@ function ComparisonRow({
         className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted"
         aria-hidden="true"
       >
-        <div
-          className="h-full rounded-full bg-primary/70"
-          style={{ width: `${pct}%` }}
-        />
+        <ProportionalBar percentage={pct} className="fill-primary/70" />
       </div>
     </div>
   );
@@ -179,10 +177,7 @@ function ProgressRow({
         className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted"
         aria-hidden="true"
       >
-        <div
-          className="h-full rounded-full bg-primary/60"
-          style={{ width: `${pct}%` }}
-        />
+        <ProportionalBar percentage={pct} className="fill-primary/60" />
       </div>
     </div>
   );

@@ -129,6 +129,13 @@
   }
 }
 
+.toaster {
+  --normal-bg: var(--popover);
+  --normal-text: var(--popover-foreground);
+  --normal-border: var(--border);
+  --border-radius: var(--radius);
+}
+
 /*
  * Reduced-motion support (PRD 24). Users who ask their OS to minimize motion get near-
  * instant transitions/animations instead of the app's fades, zooms, and sparkline reveals.
