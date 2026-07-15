@@ -4,10 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { signOut as authSignOut } from "@/auth";
 import {
-  setProfileTimeZone,
-  updateProfilePreferences,
-  updateProfileTimeZone,
-  updateReminderTimezone,
+  setProfileTimeZoneAndReminders,
+  updateProfilePreferencesAndReminders,
+  updateProfileTimeZoneAndReminders,
 } from "@/server/data";
 import { profilePreferencesSchema } from "@/lib/validation";
 
@@ -51,8 +50,7 @@ export async function updatePreferencesAction(
   }
 
   try {
-    await updateProfilePreferences(parsed.data);
-    await updateReminderTimezone(parsed.data.timezone);
+    await updateProfilePreferencesAndReminders(parsed.data);
   } catch {
     return {
       status: "error",
@@ -71,9 +69,8 @@ export async function updatePreferencesAction(
 
 export async function syncTimeZoneAction(timezone: string) {
   const input = profilePreferencesSchema.shape.timezone.parse(timezone);
-  const updated = await updateProfileTimeZone(input);
+  const updated = await updateProfileTimeZoneAndReminders(input);
   if (!updated) return;
-  await updateReminderTimezone(input);
   revalidateDateDependentPaths();
 }
 
@@ -85,8 +82,7 @@ export async function confirmTimeZoneAction(
     return { ok: false, error: "That device timezone is not valid." };
   }
   try {
-    await setProfileTimeZone(parsed.data);
-    await updateReminderTimezone(parsed.data);
+    await setProfileTimeZoneAndReminders(parsed.data);
   } catch {
     return { ok: false, error: "Could not update your timezone. Please try again." };
   }

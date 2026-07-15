@@ -24,7 +24,6 @@ import {
   deleteReminderForUser,
   listRemindersForUser,
   updateReminderForUser,
-  updateReminderTimezoneForUser,
   type ReminderScheduleInput,
 } from "./reminder-schedule-operations";
 import { requireUserId } from "./session";
@@ -93,12 +92,6 @@ export async function deleteReminderSettings(
 ): Promise<boolean> {
   const userId = await requireUserId();
   return deleteReminderForUser(db, userId, reminderId);
-}
-
-/** Keeps an enabled reminder aligned with the browser's current IANA timezone. */
-export async function updateReminderTimezone(timezone: string): Promise<void> {
-  const userId = await requireUserId();
-  await updateReminderTimezoneForUser(db, userId, timezone);
 }
 
 /** Stores (or refreshes) a Web Push subscription for the current user + device. */

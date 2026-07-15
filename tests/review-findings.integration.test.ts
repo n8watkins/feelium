@@ -9,6 +9,7 @@ import {
   ensureProfileForUser,
   setProfileTimeZoneForUser,
   syncProfileTimeZone,
+  updateProfileAndReminderTimeZoneForUser,
   updateProfilePreferencesForUser,
 } from "@/server/data/profile-operations";
 import { disableInvalidReminderSchedule } from "@/server/data/reminder-operations";
@@ -27,7 +28,6 @@ import {
   deleteReminderForUser,
   listRemindersForUser,
   updateReminderForUser,
-  updateReminderTimezoneForUser,
 } from "@/server/data/reminder-schedule-operations";
 
 async function createTestDatabase() {
@@ -1006,31 +1006,41 @@ test("two reminder occurrences on one local day deliver independently", async ()
   }
 });
 
-test("timezone changes reschedule every enabled reminder", async () => {
+test("timezone changes atomically update the profile and every enabled reminder", async () => {
   const { client, database } = await createTestDatabase();
   try {
     await client.execute(
       "insert into user (id, email) values ('zones', 'zones@example.test')",
     );
+    await ensureProfileForUser(database, "zones");
     await client.execute(`
       insert into reminder_setting
-        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+        (id, user_id, is_enabled, reminder_time, timezone, delivery_local_date,
+         delivery_occurrence_at, delivery_lease_token, delivery_lease_expires_at,
+         created_at, updated_at)
       values
-        ('enabled-one', 'zones', 1, '08:00', 'UTC', 1, 1),
-        ('enabled-two', 'zones', 1, '20:00', 'UTC', 1, 1),
-        ('disabled', 'zones', 0, '12:00', 'UTC', 1, 1)
+        ('enabled-one', 'zones', 1, '08:00', 'UTC', '2026-07-14', 1, 'lease', 2, 1, 1),
+        ('enabled-two', 'zones', 1, '20:00', 'UTC', '2026-07-14', 1, 'lease', 2, 1, 1),
+        ('disabled', 'zones', 0, '12:00', 'UTC', null, null, null, null, 1, 1)
     `);
 
     assert.equal(
-      await updateReminderTimezoneForUser(
+      await updateProfileAndReminderTimeZoneForUser(
         database,
         "zones",
-        "America/Los_Angeles",
+        { timezone: "America/Los_Angeles", weekStartsOn: 0 },
       ),
-      2,
+      true,
     );
+    const profile = await client.execute(
+      "select timezone, week_starts_on from profile where user_id = 'zones'",
+    );
+    assert.equal(profile.rows[0]?.timezone, "America/Los_Angeles");
+    assert.equal(Number(profile.rows[0]?.week_starts_on), 0);
     const result = await client.execute(
-      "select id, timezone, next_reminder_at from reminder_setting order by id",
+      `select id, timezone, next_reminder_at, delivery_local_date,
+        delivery_occurrence_at, delivery_lease_token, delivery_lease_expires_at
+       from reminder_setting order by id`,
     );
     assert.equal(
       result.rows.find((row) => row.id === "disabled")?.timezone,
@@ -1040,7 +1050,107 @@ test("timezone changes reschedule every enabled reminder", async () => {
       const row = result.rows.find((candidate) => candidate.id === id);
       assert.equal(row?.timezone, "America/Los_Angeles");
       assert.notEqual(row?.next_reminder_at, null);
+      assert.equal(row?.delivery_local_date, null);
+      assert.equal(row?.delivery_occurrence_at, null);
+      assert.equal(row?.delivery_lease_token, null);
+      assert.equal(row?.delivery_lease_expires_at, null);
     }
+  } finally {
+    client.close();
+  }
+});
+
+test("a reminder update failure rolls back the profile and every schedule", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('rollback', 'rollback@example.test')",
+    );
+    await ensureProfileForUser(database, "rollback");
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+      values
+        ('allowed', 'rollback', 1, '08:00', 'UTC', 1, 1),
+        ('blocked', 'rollback', 1, '20:00', 'UTC', 1, 1)
+    `);
+    await client.execute(`
+      create trigger reject_blocked_timezone before update on reminder_setting
+      when old.id = 'blocked'
+      begin
+        select raise(abort, 'forced reminder failure');
+      end
+    `);
+
+    await assert.rejects(
+      updateProfileAndReminderTimeZoneForUser(database, "rollback", {
+        timezone: "America/Los_Angeles",
+      }),
+      /forced reminder failure/,
+    );
+    const profile = await client.execute(
+      "select timezone from profile where user_id = 'rollback'",
+    );
+    assert.equal(profile.rows[0]?.timezone, "UTC");
+    const reminders = await client.execute(
+      "select distinct timezone from reminder_setting where user_id = 'rollback'",
+    );
+    assert.deepEqual(reminders.rows.map((row) => row.timezone), ["UTC"]);
+  } finally {
+    client.close();
+  }
+});
+
+test("timezone changes retry when a reminder changes after snapshot capture", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('concurrent', 'concurrent@example.test')",
+    );
+    await ensureProfileForUser(database, "concurrent");
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+      values ('changing', 'concurrent', 1, '08:00', 'UTC', 1, 1)
+    `);
+    let batchCalls = 0;
+    const racingDatabase = new Proxy(database, {
+      get(target, property, receiver) {
+        if (property === "batch") {
+          return async (...args: Parameters<typeof database.batch>) => {
+            batchCalls += 1;
+            if (batchCalls === 1) {
+              await client.execute(
+                "update reminder_setting set reminder_time = '09:30' where id = 'changing'",
+              );
+            }
+            return database.batch(...args);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    assert.equal(
+      await updateProfileAndReminderTimeZoneForUser(
+        racingDatabase,
+        "concurrent",
+        { timezone: "America/Los_Angeles" },
+      ),
+      true,
+    );
+    assert.equal(batchCalls, 2);
+    const result = await client.execute(
+      `select p.timezone as profile_timezone, r.timezone as reminder_timezone,
+        r.reminder_time, r.next_reminder_at
+       from profile p join reminder_setting r on r.user_id = p.user_id
+       where p.user_id = 'concurrent'`,
+    );
+    assert.equal(result.rows[0]?.profile_timezone, "America/Los_Angeles");
+    assert.equal(result.rows[0]?.reminder_timezone, "America/Los_Angeles");
+    assert.equal(result.rows[0]?.reminder_time, "09:30");
+    assert.notEqual(result.rows[0]?.next_reminder_at, null);
   } finally {
     client.close();
   }

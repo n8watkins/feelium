@@ -11,7 +11,7 @@ export type ReminderScheduleInput = {
   timezone: string;
 };
 
-function scheduleState(input: ReminderScheduleInput) {
+export function reminderScheduleState(input: ReminderScheduleInput) {
   return {
     isEnabled: input.isEnabled,
     reminderTime: input.reminderTime,
@@ -48,7 +48,7 @@ export async function createReminderForUser(
 ) {
   const [created] = await database
     .insert(reminderSettings)
-    .values({ userId, ...scheduleState(input) })
+    .values({ userId, ...reminderScheduleState(input) })
     .returning();
   return created;
 }
@@ -61,7 +61,7 @@ export async function updateReminderForUser(
 ): Promise<boolean> {
   const rows = await database
     .update(reminderSettings)
-    .set(scheduleState(input))
+    .set(reminderScheduleState(input))
     .where(
       and(
         eq(reminderSettings.id, reminderId),
@@ -87,45 +87,4 @@ export async function deleteReminderForUser(
     )
     .returning({ id: reminderSettings.id });
   return rows.length === 1;
-}
-
-export async function updateReminderTimezoneForUser(
-  database: AppDatabase,
-  userId: string,
-  timezone: string,
-): Promise<number> {
-  const reminders = await database
-    .select({
-      id: reminderSettings.id,
-      reminderTime: reminderSettings.reminderTime,
-    })
-    .from(reminderSettings)
-    .where(
-      and(
-        eq(reminderSettings.userId, userId),
-        eq(reminderSettings.isEnabled, true),
-      ),
-    );
-  let updated = 0;
-  for (const reminder of reminders) {
-    if (!reminder.reminderTime) continue;
-    const rows = await database
-      .update(reminderSettings)
-      .set(
-        scheduleState({
-          isEnabled: true,
-          reminderTime: reminder.reminderTime,
-          timezone,
-        }),
-      )
-      .where(
-        and(
-          eq(reminderSettings.id, reminder.id),
-          eq(reminderSettings.userId, userId),
-        ),
-      )
-      .returning({ id: reminderSettings.id });
-    updated += rows.length;
-  }
-  return updated;
 }
