@@ -71,6 +71,7 @@ Scheduled workflows run from the default branch, so merge the workflow before ex
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
 - Each user's delivery has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
+- Delivery progress mutations are fenced by the active lease, but Web Push dispatch and its database marker cannot be atomic; a crash or lease loss between them can cause a successful push to be retried, so dispatch remains intentionally at least once.
 - Each invocation attempts at most 25 subscriptions per user and records successful devices individually.
 - Unattempted and transiently failed devices remain pending in a fair resumable queue, even when other devices succeeded or expired subscriptions were pruned.
 - A subscription is quarantined after three consecutive transient failures so a permanently failing endpoint cannot block later daily occurrences; refreshing its browser subscription clears the quarantine.

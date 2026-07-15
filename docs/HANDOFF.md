@@ -105,7 +105,7 @@ Product tables:
 - `check_in` - a point-in-time entry (local date + timestamp + note).
 - `check_in_value` - one per outcome metric per check-in (unique); rating/boolean/numeric all nullable.
 - `tag` and `check_in_tag` - free-form tags (unique name per user) linked many-to-many to check-ins.
-- `reminder_setting` - one optional daily reminder per user, including its next UTC occurrence and most recently claimed local date.
+- `reminder_setting` - one optional daily reminder per user, including persisted scheduling and delivery state described in `docs/notifications-and-pwa.md`.
 - `push_subscription` - Web Push subscriptions per user/endpoint.
 
 ---
