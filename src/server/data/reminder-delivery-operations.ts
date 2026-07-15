@@ -323,7 +323,7 @@ export async function recordReminderSubscriptionAttempt(
   if (inserted.length !== 1) return false;
 
   const quarantineTimestamp = Math.floor(attemptedAt.getTime() / 1000);
-  await database
+  const subscriptionRows = await database
     .update(pushSubscriptions)
     .set({
       lastReminderLocalDate: delivered ? localDate : undefined,
@@ -343,9 +343,19 @@ export async function recordReminderSubscriptionAttempt(
       and(
         eq(pushSubscriptions.id, subscriptionId),
         eq(pushSubscriptions.userId, userId),
+        activeReminderDeliveryLease(
+          database,
+          reminderId,
+          userId,
+          localDate,
+          occurrenceAt,
+          token,
+          attemptedAt,
+        ),
       ),
-    );
-  return true;
+    )
+    .returning({ id: pushSubscriptions.id });
+  return subscriptionRows.length === 1;
 }
 
 export async function deleteReminderSubscription(

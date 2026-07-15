@@ -1155,3 +1155,106 @@ test("timezone changes retry when a reminder changes after snapshot capture", as
     client.close();
   }
 });
+
+test("automatic timezone sync cannot reschedule reminders after manual preference wins", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('manual-wins', 'manual@example.test')",
+    );
+    await ensureProfileForUser(database, "manual-wins");
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+      values ('manual-reminder', 'manual-wins', 1, '08:00', 'UTC', 1, 1)
+    `);
+    let batchCalls = 0;
+    const racingDatabase = new Proxy(database, {
+      get(target, property, receiver) {
+        if (property === "batch") {
+          return async (...args: Parameters<typeof database.batch>) => {
+            batchCalls += 1;
+            await client.execute(`
+              update profile
+              set timezone = 'America/New_York', auto_sync_timezone = 0
+              where user_id = 'manual-wins'
+            `);
+            return database.batch(...args);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    assert.equal(
+      await updateProfileAndReminderTimeZoneForUser(
+        racingDatabase,
+        "manual-wins",
+        {
+          timezone: "America/Los_Angeles",
+          requireAutoSync: true,
+        },
+      ),
+      false,
+    );
+    assert.equal(batchCalls, 1);
+    const result = await client.execute(`
+      select p.timezone as profile_timezone, r.timezone as reminder_timezone
+      from profile p join reminder_setting r on r.user_id = p.user_id
+      where p.user_id = 'manual-wins'
+    `);
+    assert.equal(result.rows[0]?.profile_timezone, "America/New_York");
+    assert.equal(result.rows[0]?.reminder_timezone, "UTC");
+  } finally {
+    client.close();
+  }
+});
+
+test("subscription state remains unchanged when the lease is reclaimed after attempt recording", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('reclaimed', 'reclaimed@example.test')",
+    );
+    const token = await claimTestReminder(client, database, "reclaimed");
+    await client.execute(`
+      insert into push_subscription
+        (id, user_id, endpoint, subscription_data, created_at)
+      values ('reclaimed-device', 'reclaimed', 'https://push.example/reclaimed', '{}', 1)
+    `);
+    await client.execute(`
+      create trigger reclaim_after_attempt after insert on reminder_delivery_attempt
+      begin
+        update reminder_setting
+        set delivery_lease_token = 'replacement-token'
+        where id = new.reminder_id;
+      end
+    `);
+
+    assert.equal(
+      await recordReminderSubscriptionAttempt(
+        database,
+        "reclaimed-device",
+        "reminder-reclaimed",
+        "reclaimed",
+        "2026-07-14",
+        new Date(1000),
+        token,
+        false,
+        new Date(1000),
+        1,
+      ),
+      false,
+    );
+    const result = await client.execute(`
+      select last_reminder_attempt_at, reminder_failure_count, reminder_quarantined_at
+      from push_subscription where id = 'reclaimed-device'
+    `);
+    assert.equal(result.rows[0]?.last_reminder_attempt_at, null);
+    assert.equal(Number(result.rows[0]?.reminder_failure_count), 0);
+    assert.equal(result.rows[0]?.reminder_quarantined_at, null);
+  } finally {
+    client.close();
+  }
+});

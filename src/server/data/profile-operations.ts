@@ -1,5 +1,5 @@
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, exists, sql } from "drizzle-orm";
 
 import { profiles, reminderSettings, users } from "@/db/schema";
 import { reminderScheduleState } from "./reminder-schedule-operations";
@@ -110,6 +110,25 @@ function reminderSnapshotGuard(
   return sql`${enabledCount} = ${reminders.length} and ${matchingCount} = ${reminders.length}`;
 }
 
+function profileTimeZoneGuard(
+  database: AppDatabase,
+  userId: string,
+  timezone: string,
+) {
+  return exists(
+    database
+      .select({ userId: profiles.userId })
+      .from(profiles)
+      .where(
+        and(
+          eq(profiles.userId, userId),
+          eq(profiles.timezone, timezone),
+          eq(profiles.autoSyncTimezone, false),
+        ),
+      ),
+  );
+}
+
 /**
  * Updates a profile timezone and every enabled reminder in one atomic batch.
  * A snapshot guard retries the whole batch if reminder membership or times changed
@@ -178,6 +197,7 @@ export async function updateProfileAndReminderTimeZoneForUser(
               eq(reminderSettings.isEnabled, true),
               eq(reminderSettings.reminderTime, reminder.reminderTime),
               guard,
+              profileTimeZoneGuard(database, userId, input.timezone),
             ),
           ),
       );
