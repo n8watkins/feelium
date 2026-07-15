@@ -8,6 +8,7 @@ import { isValidTimeZone } from "@/lib/date";
 import { StaleSessionError } from "./errors";
 import {
   ensureProfileForUser,
+  setProfileTimeZoneForUser,
   syncProfileTimeZone,
   updateProfilePreferencesForUser,
 } from "./profile-operations";
@@ -59,8 +60,16 @@ export async function updateProfilePreferences(
 }
 
 /** Updates only the timezone detected by the signed-in user's browser. */
-export async function updateProfileTimeZone(timezone: string): Promise<void> {
+export async function updateProfileTimeZone(timezone: string): Promise<boolean> {
   if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
   const userId = await requireUserId();
-  await syncProfileTimeZone(db, userId, timezone);
+  return syncProfileTimeZone(db, userId, timezone);
+}
+
+/** Applies a timezone change the signed-in user explicitly confirmed. */
+export async function setProfileTimeZone(timezone: string): Promise<void> {
+  if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
+  const userId = await requireUserId();
+  const updated = await setProfileTimeZoneForUser(db, userId, timezone);
+  if (!updated) throw new StaleSessionError();
 }

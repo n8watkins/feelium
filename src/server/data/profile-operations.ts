@@ -55,3 +55,20 @@ export async function updateProfilePreferencesForUser(
     .returning({ userId: profiles.userId });
   return rows.length === 1;
 }
+
+export async function setProfileTimeZoneForUser(
+  database: AppDatabase,
+  userId: string,
+  timezone: string,
+): Promise<boolean> {
+  const rows = await database
+    .update(profiles)
+    .set({
+      timezone,
+      autoSyncTimezone: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(profiles.userId, userId))
+    .returning({ userId: profiles.userId });
+  return rows.length === 1;
+}

@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "@/db/schema";
 import {
   ensureProfileForUser,
+  setProfileTimeZoneForUser,
   syncProfileTimeZone,
   updateProfilePreferencesForUser,
 } from "@/server/data/profile-operations";
@@ -189,6 +190,29 @@ test("manual preferences persist only for the selected profile", async () => {
         },
       ],
     );
+  } finally {
+    client.close();
+  }
+});
+
+test("an explicit device-timezone correction updates a legacy profile", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('legacy', 'legacy@example.test')");
+    await ensureProfileForUser(database, "legacy");
+    await client.execute(
+      "update profile set timezone = 'UTC', auto_sync_timezone = 0 where user_id = 'legacy'",
+    );
+
+    assert.equal(
+      await setProfileTimeZoneForUser(database, "legacy", "America/Los_Angeles"),
+      true,
+    );
+    const result = await client.execute(
+      "select timezone, auto_sync_timezone from profile where user_id = 'legacy'",
+    );
+    assert.equal(result.rows[0]?.timezone, "America/Los_Angeles");
+    assert.equal(Number(result.rows[0]?.auto_sync_timezone), 0);
   } finally {
     client.close();
   }
