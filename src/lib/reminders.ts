@@ -9,6 +9,7 @@ type LocalParts = {
 export type ReminderEvaluation = {
   due: boolean;
   localDate: string;
+  occurrenceAt: Date;
   nextAt: Date;
 };
 
@@ -68,7 +69,8 @@ export function reminderOccurrence(
     for (let hours = 1; hours <= 3; hours += 1) {
       const earlier = new Date(candidate.getTime() - hours * 60 * 60_000);
       const parts = localParts(earlier, timezone);
-      if (parts.date === localDate && parts.time === reminderTime) earliest = earlier;
+      if (parts.date === localDate && parts.time === reminderTime)
+        earliest = earlier;
     }
     return earliest;
   }
@@ -79,7 +81,8 @@ export function reminderOccurrence(
   const end = candidate.getTime() + 3 * 60 * 60_000;
   for (let at = start; at <= end; at += 60_000) {
     const parts = localParts(new Date(at), timezone);
-    if (parts.date === localDate && parts.time >= reminderTime) return new Date(at);
+    if (parts.date === localDate && parts.time >= reminderTime)
+      return new Date(at);
   }
 
   throw new Error("UNRESOLVABLE_REMINDER_TIME");
@@ -107,7 +110,8 @@ export function evaluateReminder(
   assertValidReminderTime(reminderTime);
   const today = dateISOInTimeZone(now, timezone);
   const todayOccurrence = reminderOccurrence(today, reminderTime, timezone);
-  const localDate = todayOccurrence.getTime() <= now.getTime() ? today : addDaysISO(today, -1);
+  const localDate =
+    todayOccurrence.getTime() <= now.getTime() ? today : addDaysISO(today, -1);
   const occurrence =
     localDate === today
       ? todayOccurrence
@@ -116,6 +120,7 @@ export function evaluateReminder(
   return {
     due: elapsed >= 0 && elapsed < windowMinutes * 60_000,
     localDate,
+    occurrenceAt: occurrence,
     nextAt: nextReminderAt(reminderTime, timezone, now),
   };
 }

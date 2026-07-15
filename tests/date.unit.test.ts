@@ -16,6 +16,13 @@ test("formats one instant as the correct local calendar date", () => {
   assert.equal(dateISOInTimeZone(instant, "Asia/Tokyo"), "2026-07-14");
 });
 
+test("keeps the Pacific calendar date before UTC midnight reaches the West Coast", () => {
+  const instant = new Date("2026-07-15T03:00:00.000Z");
+
+  assert.equal(dateISOInTimeZone(instant, "UTC"), "2026-07-15");
+  assert.equal(dateISOInTimeZone(instant, "America/Los_Angeles"), "2026-07-14");
+});
+
 test("adds calendar days safely across leap days and DST boundaries", () => {
   assert.equal(addDaysISO("2024-02-28", 1), "2024-02-29");
   assert.equal(addDaysISO("2026-03-08", 1), "2026-03-09");

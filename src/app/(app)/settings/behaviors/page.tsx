@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, FolderCog, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { ArchiveButton } from "@/components/tracking/archive-button";
@@ -6,12 +6,13 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { CategoryBadge } from "@/components/tracking/category-badge";
 import { CircleCheck } from "lucide-react";
 import {
   behaviorDirectionLabel,
   behaviorInputTypeLabel,
 } from "@/config/tracking";
-import { listBehaviors } from "@/server/data";
+import { listBehaviorCategories, listBehaviors } from "@/server/data";
 import {
   archiveBehaviorAction,
   moveBehaviorAction,
@@ -21,7 +22,11 @@ import {
 export const metadata = { title: "Behaviors" };
 
 export default async function BehaviorsPage() {
-  const all = await listBehaviors();
+  const [all, categories] = await Promise.all([
+    listBehaviors(),
+    listBehaviorCategories(),
+  ]);
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
   const active = all.filter((b) => b.isActive);
   const archived = all.filter((b) => !b.isActive);
 
@@ -41,6 +46,12 @@ export default async function BehaviorsPage() {
       />
 
       <div className="space-y-6 px-4 pt-2 md:px-8">
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/settings/behaviors/categories">
+            <FolderCog className="size-4" aria-hidden="true" />
+            Manage categories
+          </Link>
+        </Button>
         {active.length === 0 && archived.length === 0 ? (
           <EmptyState
             icon={CircleCheck}
@@ -69,6 +80,14 @@ export default async function BehaviorsPage() {
                       {behavior.unit ? (
                         <Badge variant="outline">{behavior.unit}</Badge>
                       ) : null}
+                      {behavior.categoryId && categoryById.get(behavior.categoryId) ? (
+                        <CategoryBadge
+                          name={categoryById.get(behavior.categoryId)!.name}
+                          color={categoryById.get(behavior.categoryId)!.color}
+                        />
+                      ) : (
+                        <Badge variant="outline">Uncategorized</Badge>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col">
@@ -126,8 +145,14 @@ export default async function BehaviorsPage() {
                   key={behavior.id}
                   className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border p-3"
                 >
-                  <span className="text-sm text-muted-foreground">
+                  <span className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     {behavior.name}
+                    {behavior.categoryId && categoryById.get(behavior.categoryId) ? (
+                      <CategoryBadge
+                        name={categoryById.get(behavior.categoryId)!.name}
+                        color={categoryById.get(behavior.categoryId)!.color}
+                      />
+                    ) : null}
                   </span>
                   <form action={reactivateBehaviorAction}>
                     <input type="hidden" name="id" value={behavior.id} />

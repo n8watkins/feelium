@@ -13,6 +13,7 @@ import type { LucideIcon } from "lucide-react";
 import { auth } from "@/auth";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PageHeader } from "@/components/page-header";
+import { PreferencesForm } from "@/components/settings/preferences-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,7 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentProfile } from "@/server/data";
-import { signOut, updatePreferencesAction } from "./actions";
+import { signOut } from "./actions";
 
 const WEEKDAYS = [
   "Sunday",
@@ -81,40 +82,12 @@ export default async function SettingsPage() {
               <span className="text-sm font-medium">Theme</span>
               <ModeToggle />
             </div>
-            <form action={updatePreferencesAction} className="space-y-4 border-t border-border pt-4">
-              <label className="grid gap-1.5 text-sm font-medium">
-                Timezone
-                <select
-                  name="timezone"
-                  defaultValue={profile?.timezone ?? "UTC"}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {!TIMEZONES.includes("UTC") ? <option value="UTC">UTC</option> : null}
-                  {TIMEZONES.map((timezone) => (
-                    <option key={timezone} value={timezone}>
-                      {timezone.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Start of week
-                <select
-                  name="weekStartsOn"
-                  defaultValue={String(profile?.weekStartsOn ?? 1)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {WEEKDAYS.map((day, index) => (
-                    <option key={day} value={index}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button type="submit" variant="outline">
-                Save preferences
-              </Button>
-            </form>
+            <PreferencesForm
+              timezone={profile?.timezone ?? "UTC"}
+              weekStartsOn={profile?.weekStartsOn ?? 1}
+              timezones={TIMEZONES}
+              weekdays={WEEKDAYS}
+            />
           </CardContent>
         </Card>
 
@@ -160,7 +133,7 @@ export default async function SettingsPage() {
               Notifications
             </CardTitle>
             <CardDescription>
-              One optional daily reminder to check in.
+              Optional daily reminders at the times that work for you.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -170,9 +143,9 @@ export default async function SettingsPage() {
                 className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="flex-1">
-                  <span className="block text-sm font-medium">Daily reminder</span>
+                  <span className="block text-sm font-medium">Daily reminders</span>
                   <span className="block text-xs text-muted-foreground">
-                    Enable, set a time, and view permission status
+                    Add times, pause reminders, and view permission status
                   </span>
                 </span>
                 <ChevronRight

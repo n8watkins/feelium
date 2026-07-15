@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { BehaviorForm } from "@/components/tracking/behavior-form";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { listBehaviorCategories } from "@/server/data";
 import { createBehaviorAction } from "../actions";
 
 export const metadata = { title: "New behavior" };
@@ -15,6 +16,7 @@ export default async function NewBehaviorPage({
   const returnTo = from ? safeRedirectPath(from, "/settings/behaviors") : undefined;
   const backHref = returnTo ?? "/settings/behaviors";
   const backLabel = returnTo === "/today" ? "Today" : "Behaviors";
+  const categories = await listBehaviorCategories();
 
   return (
     <>
@@ -24,6 +26,7 @@ export default async function NewBehaviorPage({
           action={createBehaviorAction}
           submitLabel="Create behavior"
           returnTo={returnTo}
+          categories={categories}
         />
       </div>
     </>

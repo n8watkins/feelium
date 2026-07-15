@@ -35,18 +35,20 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-dvh">
+    <>
       <TimezoneSync
         currentTimeZone={profile.timezone}
         shouldSync={profile.autoSyncTimezone}
       />
-      <AppSidebar />
-      <div className="flex min-h-dvh flex-1 flex-col">
-        <main className="mx-auto w-full max-w-2xl flex-1 pb-24 md:pb-10">
-          {children}
-        </main>
+      <div className="flex min-h-dvh">
+        <AppSidebar />
+        <div className="flex min-h-dvh flex-1 flex-col">
+          <main className="mx-auto w-full max-w-2xl flex-1 pb-24 md:pb-10">
+            {children}
+          </main>
+        </div>
+        <BottomNav />
       </div>
-      <BottomNav />
-    </div>
+    </>
   );
 }

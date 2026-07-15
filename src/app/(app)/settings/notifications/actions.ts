@@ -5,25 +5,24 @@ import type { PushSubscription as WebPushSubscription } from "web-push";
 import { revalidatePath } from "next/cache";
 
 import {
+  createReminderSettings,
+  deleteReminderSettings,
   deleteMyPushSubscription,
   listMyPushSubscriptions,
   savePushSubscription,
-  updateReminderTimezone,
-  upsertReminderSettings,
-  type ReminderSettings,
+  updateReminderSettings,
+  type ReminderSchedule,
   type WebPushSubscriptionJSON,
 } from "@/server/data";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 import {
   deviceNameSchema,
   pushSubscriptionSchema,
+  recordIdSchema,
   reminderSettingsSchema,
 } from "@/lib/validation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
-
-/** Matches a 24h "HH:MM" time-of-day. */
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** The gentle reminder copy (PRD 17: no guilt/shame; tapping opens the check-in). */
 const REMINDER_URL = "/checkin/new";
@@ -42,58 +41,133 @@ export async function subscribeToPushAction(
   try {
     await savePushSubscription(parsed.data, parsedDeviceName.data ?? null);
   } catch {
-    return { ok: false, error: "Could not save your subscription. Please try again." };
+    return {
+      ok: false,
+      error: "Could not save your subscription. Please try again.",
+    };
   }
   revalidatePath("/settings/notifications");
   return { ok: true };
 }
 
 /** Removes a push subscription (e.g. the user turned notifications off on this device). */
-export async function unsubscribeFromPushAction(endpoint: string): Promise<ActionResult> {
+export async function unsubscribeFromPushAction(
+  endpoint: string,
+): Promise<ActionResult> {
   if (!endpoint) return { ok: false, error: "Missing subscription." };
   try {
     await deleteMyPushSubscription(endpoint);
   } catch {
-    return { ok: false, error: "Could not remove your subscription. Please try again." };
+    return {
+      ok: false,
+      error: "Could not remove your subscription. Please try again.",
+    };
   }
   revalidatePath("/settings/notifications");
   return { ok: true };
 }
 
-/** Saves the single daily reminder (enabled, time, timezone). PRD 17. */
-export async function saveReminderSettingsAction(
-  input: ReminderSettings,
-): Promise<ActionResult> {
-  const normalized = {
-    ...input,
-    reminderTime: input.reminderTime && TIME_RE.test(input.reminderTime) ? input.reminderTime : null,
+type ReminderActionResult =
+  { ok: true; reminder?: ReminderSchedule } | { ok: false; error: string };
+
+function duplicateReminderError(error: unknown): boolean {
+  let current: unknown = error;
+  while (current instanceof Error) {
+    if (
+      current.message.includes("reminder_setting_unique_time_per_user") ||
+      current.message.includes(
+        "reminder_setting.user_id, reminder_setting.reminder_time",
+      )
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
+function parseReminderInput(input: {
+  isEnabled: boolean;
+  reminderTime: string;
+  timezone: string;
+}) {
+  const parsed = reminderSettingsSchema.safeParse(input);
+  if (!parsed.success || !parsed.data.reminderTime) return null;
+  return {
+    isEnabled: parsed.data.isEnabled,
+    reminderTime: parsed.data.reminderTime,
+    timezone: parsed.data.timezone,
   };
-  const parsed = reminderSettingsSchema.safeParse(normalized);
-  if (!parsed.success || (parsed.data.isEnabled && !parsed.data.reminderTime)) {
+}
+
+export async function createReminderAction(input: {
+  reminderTime: string;
+  timezone: string;
+}): Promise<ReminderActionResult> {
+  const parsed = parseReminderInput({ ...input, isEnabled: true });
+  if (!parsed) {
     return { ok: false, error: "Choose a valid reminder time." };
   }
-
   try {
-    await upsertReminderSettings(parsed.data);
-  } catch {
-    return { ok: false, error: "Could not save your reminder. Please try again." };
-  }
-  revalidatePath("/settings/notifications");
-  return { ok: true };
-}
-
-/** Updates only the timezone of an already-enabled reminder after browser detection. */
-export async function syncReminderTimezoneAction(timezone: string): Promise<void> {
-  const parsed = reminderSettingsSchema.shape.timezone.safeParse(timezone);
-  if (!parsed.success) return;
-  try {
-    await updateReminderTimezone(parsed.data);
-  } catch {
-    // This background synchronization is best-effort. The next explicit save retries it.
+    const reminder = await createReminderSettings(parsed);
+    revalidatePath("/settings/notifications");
+    return { ok: true, reminder };
+  } catch (error) {
+    if (duplicateReminderError(error)) {
+      return { ok: false, error: "A reminder at that time already exists." };
+    }
+    return {
+      ok: false,
+      error: "Could not save your reminder. Please try again.",
+    };
   }
 }
 
-export type TestSendResult = { ok: true; sent: number } | { ok: false; error: string };
+export async function updateReminderAction(
+  reminderId: string,
+  input: { isEnabled: boolean; reminderTime: string; timezone: string },
+): Promise<ReminderActionResult> {
+  const id = recordIdSchema.safeParse(reminderId);
+  const parsed = parseReminderInput(input);
+  if (!id.success || !parsed) {
+    return { ok: false, error: "Choose a valid reminder time." };
+  }
+  try {
+    const updated = await updateReminderSettings(id.data, parsed);
+    if (!updated) return { ok: false, error: "Reminder not found." };
+    revalidatePath("/settings/notifications");
+    return { ok: true };
+  } catch (error) {
+    if (duplicateReminderError(error)) {
+      return { ok: false, error: "A reminder at that time already exists." };
+    }
+    return {
+      ok: false,
+      error: "Could not save your reminder. Please try again.",
+    };
+  }
+}
+
+export async function deleteReminderAction(
+  reminderId: string,
+): Promise<ActionResult> {
+  const id = recordIdSchema.safeParse(reminderId);
+  if (!id.success) return { ok: false, error: "Reminder not found." };
+  try {
+    const deleted = await deleteReminderSettings(id.data);
+    if (!deleted) return { ok: false, error: "Reminder not found." };
+    revalidatePath("/settings/notifications");
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error: "Could not delete your reminder. Please try again.",
+    };
+  }
+}
+
+export type TestSendResult =
+  { ok: true; sent: number } | { ok: false; error: string };
 
 /**
  * Sends a test reminder to every device the current user has subscribed. Prunes any
@@ -105,16 +179,22 @@ export async function sendTestNotificationAction(): Promise<TestSendResult> {
   }
   const subs = await listMyPushSubscriptions();
   if (subs.length === 0) {
-    return { ok: false, error: "No devices are subscribed on this account yet." };
+    return {
+      ok: false,
+      error: "No devices are subscribed on this account yet.",
+    };
   }
 
   let sent = 0;
   for (const sub of subs) {
-    const result = await sendPush(sub.subscriptionData as unknown as WebPushSubscription, {
-      title: REMINDER_TITLE,
-      body: "This is a test reminder. Tap to open your check-in.",
-      url: REMINDER_URL,
-    });
+    const result = await sendPush(
+      sub.subscriptionData as unknown as WebPushSubscription,
+      {
+        title: REMINDER_TITLE,
+        body: "This is a test reminder. Tap to open your check-in.",
+        url: REMINDER_URL,
+      },
+    );
     if (result.ok) {
       sent += 1;
     } else if (result.gone) {
@@ -123,7 +203,11 @@ export async function sendTestNotificationAction(): Promise<TestSendResult> {
   }
 
   if (sent === 0) {
-    return { ok: false, error: "Could not deliver to any device. Try turning reminders off and on." };
+    return {
+      ok: false,
+      error:
+        "Could not deliver to any device. Try turning reminders off and on.",
+    };
   }
   return { ok: true, sent };
 }

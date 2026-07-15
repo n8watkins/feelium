@@ -3,10 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import {
-  isBehaviorDirection,
-  isBehaviorInputType,
-} from "@/config/tracking";
+import { isBehaviorDirection, isBehaviorInputType } from "@/config/tracking";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
   MAX_DESCRIPTION_LENGTH,
@@ -26,6 +23,7 @@ import {
 const LIST_PATH = "/settings/behaviors";
 
 type BehaviorValues = {
+  categoryId: string;
   name: string;
   inputType: string;
   desiredDirection: string;
@@ -45,6 +43,7 @@ function parseBehavior(
   | { ok: true; input: BehaviorInput; values: BehaviorValues }
   | { ok: false; errors: Record<string, string>; values: BehaviorValues } {
   const values: BehaviorValues = {
+    categoryId: String(formData.get("categoryId") ?? ""),
     name: String(formData.get("name") ?? "").trim(),
     inputType: String(formData.get("inputType") ?? ""),
     desiredDirection: String(formData.get("desiredDirection") ?? ""),
@@ -83,6 +82,7 @@ function parseBehavior(
     ok: true,
     values,
     input: {
+      categoryId: values.categoryId || null,
       name: values.name,
       inputType: values.inputType,
       desiredDirection: values.desiredDirection,
@@ -100,7 +100,17 @@ export async function createBehaviorAction(
   const parsed = parseBehavior(formData);
   if (!parsed.ok) return { errors: parsed.errors, values: parsed.values };
 
-  await createBehavior(parsed.input);
+  try {
+    await createBehavior(parsed.input);
+  } catch (error) {
+    if (error instanceof Error && error.message === "CATEGORY_NOT_FOUND") {
+      return {
+        errors: { categoryId: "That category no longer exists." },
+        values: parsed.values,
+      };
+    }
+    throw error;
+  }
   revalidatePath(LIST_PATH);
   // Return to wherever this was launched from (e.g. Today), defaulting to the list.
   const destination = safeRedirectPath(
@@ -131,11 +141,22 @@ export async function updateBehaviorAction(
         values: parsed.values,
       };
     }
+    if (error instanceof Error && error.message === "CATEGORY_NOT_FOUND") {
+      return {
+        errors: { categoryId: "That category no longer exists." },
+        values: parsed.values,
+      };
+    }
     throw error;
   }
 
   revalidatePath(LIST_PATH);
-  redirect(LIST_PATH);
+  const destination = safeRedirectPath(
+    String(formData.get("from") ?? ""),
+    LIST_PATH,
+  );
+  revalidatePath(destination);
+  redirect(destination);
 }
 
 export async function archiveBehaviorAction(formData: FormData) {

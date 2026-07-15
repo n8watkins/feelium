@@ -5,15 +5,18 @@ import { reminderSettings } from "@/db/schema";
 type AppDatabase = (typeof import("@/db"))["db"];
 
 export type ReminderCandidate = {
+  id: string;
   userId: string;
   reminderTime: string;
   timezone: string;
   nextReminderAt: Date | null;
   deliveryLocalDate: string | null;
+  deliveryOccurrenceAt: Date | null;
 };
 
 export function reminderScheduleCondition(reminder: ReminderCandidate) {
   return and(
+    eq(reminderSettings.id, reminder.id),
     eq(reminderSettings.userId, reminder.userId),
     eq(reminderSettings.isEnabled, true),
     eq(reminderSettings.reminderTime, reminder.reminderTime),

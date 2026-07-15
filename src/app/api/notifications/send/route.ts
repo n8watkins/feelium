@@ -26,7 +26,7 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
  * minutes with `Authorization: Bearer <CRON_SECRET>`; we verify it against the
  * CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
  *
- * For each user with the reminder enabled, if the resolved occurrence in their saved
+ * For each enabled reminder, if the resolved occurrence in its saved
  * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
  * all of their subscribed devices and prune any that are gone.
  *
@@ -57,13 +57,17 @@ function isAuthorized(request: NextRequest): boolean {
   const auth = request.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
   return (
-    process.env.NODE_ENV !== "production" && request.nextUrl.searchParams.get("secret") === secret
+    process.env.NODE_ENV !== "production" &&
+    request.nextUrl.searchParams.get("secret") === secret
   );
 }
 
 async function handle(request: NextRequest) {
   if (!isAuthorized(request)) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
+    );
   }
   if (!isPushConfigured()) {
     return NextResponse.json(
@@ -96,6 +100,7 @@ async function handle(request: NextRequest) {
         ...evaluation,
         due: evaluation.due || reminder.deliveryLocalDate !== null,
         localDate: reminder.deliveryLocalDate ?? evaluation.localDate,
+        occurrenceAt: reminder.deliveryOccurrenceAt ?? evaluation.occurrenceAt,
       });
     } catch (error) {
       if (
@@ -113,6 +118,7 @@ async function handle(request: NextRequest) {
     }
   }
   const due = evaluated.filter((reminder) => reminder.due);
+  const dueUsers = new Set(due.map((reminder) => reminder.userId)).size;
 
   if (dryRun) {
     return NextResponse.json({
@@ -121,12 +127,15 @@ async function handle(request: NextRequest) {
       windowMinutes,
       candidates: candidates.length,
       invalidCandidates: invalid.length,
-      dueUsers: due.length,
+      dueUsers,
+      dueReminders: due.length,
       due: due.map((r) => ({
+        reminderId: r.id,
         userId: r.userId,
         reminderTime: r.reminderTime,
         timezone: r.timezone,
         localDate: r.localDate,
+        occurrenceAt: r.occurrenceAt,
       })),
     });
   }
@@ -134,16 +143,16 @@ async function handle(request: NextRequest) {
   let sent = 0;
   let pruned = 0;
   let failed = 0;
-  let claimedUsers = 0;
-  const disabledInvalid = (await Promise.all(invalid.map(disableInvalidReminder))).filter(
-    Boolean,
-  ).length;
+  let claimedReminders = 0;
+  const disabledInvalid = (
+    await Promise.all(invalid.map(disableInvalidReminder))
+  ).filter(Boolean).length;
   const notDue = evaluated.filter((reminder) => !reminder.due);
   await Promise.all(
     notDue.map((reminder) => scheduleNextReminder(reminder, reminder.nextAt)),
   );
 
-  async function sendForUser(reminder: (typeof due)[number]) {
+  async function sendForReminder(reminder: (typeof due)[number]) {
     let userSent = 0;
     let userPruned = 0;
     let userFailed = 0;
@@ -154,17 +163,19 @@ async function handle(request: NextRequest) {
       claimToken = await claimReminderDelivery(
         reminder,
         reminder.localDate,
+        reminder.occurrenceAt,
         new Date(),
         REMINDER_DELIVERY_LEASE_MS,
       );
       if (!claimToken) {
         return;
       }
-      claimedUsers += 1;
+      claimedReminders += 1;
 
       const subscriptions = await listPushSubscriptionsForReminder(
+        reminder.id,
         reminder.userId,
-        reminder.localDate,
+        reminder.occurrenceAt,
         MAX_SUBSCRIPTIONS_PER_USER_PER_RUN,
       );
       for (
@@ -173,8 +184,10 @@ async function handle(request: NextRequest) {
         offset += SUBSCRIPTION_DISPATCH_BATCH_SIZE
       ) {
         ownsLease = await renewReminderDelivery(
+          reminder.id,
           reminder.userId,
           reminder.localDate,
+          reminder.occurrenceAt,
           claimToken,
           new Date(),
           REMINDER_DELIVERY_LEASE_MS,
@@ -202,8 +215,10 @@ async function handle(request: NextRequest) {
           if (result.ok) {
             mutationApplied = await markPushSubscriptionAttempt(
               subscription.id,
+              reminder.id,
               reminder.userId,
               reminder.localDate,
+              reminder.occurrenceAt,
               claimToken,
               true,
               mutatedAt,
@@ -213,8 +228,10 @@ async function handle(request: NextRequest) {
           } else if (result.gone) {
             mutationApplied = await deletePushSubscriptionForReminder(
               subscription.id,
+              reminder.id,
               reminder.userId,
               reminder.localDate,
+              reminder.occurrenceAt,
               claimToken,
               mutatedAt,
             );
@@ -222,8 +239,10 @@ async function handle(request: NextRequest) {
           } else {
             mutationApplied = await markPushSubscriptionAttempt(
               subscription.id,
+              reminder.id,
               reminder.userId,
               reminder.localDate,
+              reminder.occurrenceAt,
               claimToken,
               false,
               mutatedAt,
@@ -237,8 +256,9 @@ async function handle(request: NextRequest) {
       }
       if (ownsLease) {
         hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
+          reminder.id,
           reminder.userId,
-          reminder.localDate,
+          reminder.occurrenceAt,
         );
       }
     } catch {
@@ -254,16 +274,20 @@ async function handle(request: NextRequest) {
       let finalized: boolean;
       if (hasPendingSubscriptions) {
         finalized = await releaseReminderDelivery(
+          reminder.id,
           reminder.userId,
           reminder.localDate,
+          reminder.occurrenceAt,
           claimToken,
           finalizedAt,
           new Date(finalizedAt.getTime() + REMINDER_RETRY_DELAY_MS),
         );
       } else {
         finalized = await completeReminderDelivery(
+          reminder.id,
           reminder.userId,
           reminder.localDate,
+          reminder.occurrenceAt,
           claimToken,
           finalizedAt,
           reminder.nextAt,
@@ -276,15 +300,18 @@ async function handle(request: NextRequest) {
   }
 
   for (let offset = 0; offset < due.length; offset += SEND_CONCURRENCY) {
-    await Promise.all(due.slice(offset, offset + SEND_CONCURRENCY).map(sendForUser));
+    await Promise.all(
+      due.slice(offset, offset + SEND_CONCURRENCY).map(sendForReminder),
+    );
   }
 
   return NextResponse.json({
     ok: true,
     candidates: candidates.length,
     disabledInvalid,
-    dueUsers: due.length,
-    claimedUsers,
+    dueUsers,
+    dueReminders: due.length,
+    claimedReminders,
     sent,
     pruned,
     failed,

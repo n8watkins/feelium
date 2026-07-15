@@ -1,10 +1,11 @@
 import type { BatchItem } from "drizzle-orm/batch";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import * as schema from "@/db/schema";
 import {
   accounts,
+  behaviorCategories,
   behaviors,
   checkInTags,
   checkInValues,
@@ -13,6 +14,7 @@ import {
   outcomeMetrics,
   profiles,
   pushSubscriptions,
+  reminderDeliveryAttempts,
   reminderSettings,
   sessions,
   tags,
@@ -54,13 +56,15 @@ export type UserDataExport = {
     updatedAt: Date;
   } | null;
   behaviors: (typeof behaviors.$inferSelect)[];
+  behaviorCategories: (typeof behaviorCategories.$inferSelect)[];
   dailyBehaviorEntries: (typeof dailyBehaviorEntries.$inferSelect)[];
   outcomeMetrics: (typeof outcomeMetrics.$inferSelect)[];
   checkIns: (typeof checkIns.$inferSelect)[];
   checkInValues: (typeof checkInValues.$inferSelect)[];
   tags: (typeof tags.$inferSelect)[];
   checkInTags: { checkInId: string; tagId: string; tagName: string }[];
-  reminderSettings: typeof reminderSettings.$inferSelect | null;
+  reminderSettings: (typeof reminderSettings.$inferSelect)[];
+  reminderDeliveryAttempts: (typeof reminderDeliveryAttempts.$inferSelect)[];
   pushSubscriptions: (typeof pushSubscriptions.$inferSelect)[];
 };
 
@@ -77,6 +81,7 @@ export async function exportUserDataForUser(
   const [
     user,
     profile,
+    categories,
     userBehaviors,
     entries,
     metrics,
@@ -85,6 +90,7 @@ export async function exportUserDataForUser(
     userTags,
     tagLinks,
     reminder,
+    deliveryAttempts,
     subscriptions,
   ] = await Promise.all([
     database
@@ -92,7 +98,19 @@ export async function exportUserDataForUser(
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
-    database.select().from(profiles).where(eq(profiles.userId, userId)).limit(1),
+    database
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1),
+    database
+      .select()
+      .from(behaviorCategories)
+      .where(eq(behaviorCategories.userId, userId))
+      .orderBy(
+        asc(behaviorCategories.sortOrder),
+        asc(behaviorCategories.createdAt),
+      ),
     database
       .select()
       .from(behaviors)
@@ -113,7 +131,10 @@ export async function exportUserDataForUser(
       .from(checkIns)
       .where(eq(checkIns.userId, userId))
       .orderBy(asc(checkIns.occurredAt)),
-    database.select().from(checkInValues).where(eq(checkInValues.userId, userId)),
+    database
+      .select()
+      .from(checkInValues)
+      .where(eq(checkInValues.userId, userId)),
     database
       .select()
       .from(tags)
@@ -133,7 +154,42 @@ export async function exportUserDataForUser(
       .select()
       .from(reminderSettings)
       .where(eq(reminderSettings.userId, userId))
-      .limit(1),
+      .orderBy(
+        asc(reminderSettings.reminderTime),
+        asc(reminderSettings.createdAt),
+      ),
+    database
+      .select({
+        id: reminderDeliveryAttempts.id,
+        reminderId: reminderDeliveryAttempts.reminderId,
+        subscriptionId: reminderDeliveryAttempts.subscriptionId,
+        occurrenceAt: reminderDeliveryAttempts.occurrenceAt,
+        localDate: reminderDeliveryAttempts.localDate,
+        attemptCount: reminderDeliveryAttempts.attemptCount,
+        lastAttemptAt: reminderDeliveryAttempts.lastAttemptAt,
+        deliveredAt: reminderDeliveryAttempts.deliveredAt,
+        createdAt: reminderDeliveryAttempts.createdAt,
+        updatedAt: reminderDeliveryAttempts.updatedAt,
+      })
+      .from(reminderDeliveryAttempts)
+      .innerJoin(
+        reminderSettings,
+        eq(reminderDeliveryAttempts.reminderId, reminderSettings.id),
+      )
+      .innerJoin(
+        pushSubscriptions,
+        eq(reminderDeliveryAttempts.subscriptionId, pushSubscriptions.id),
+      )
+      .where(
+        and(
+          eq(reminderSettings.userId, userId),
+          eq(pushSubscriptions.userId, userId),
+        ),
+      )
+      .orderBy(
+        asc(reminderDeliveryAttempts.occurrenceAt),
+        asc(reminderDeliveryAttempts.createdAt),
+      ),
     database
       .select()
       .from(pushSubscriptions)
@@ -144,7 +200,7 @@ export async function exportUserDataForUser(
   return {
     exportedAt: nowIso,
     app: "feelium",
-    formatVersion: 1,
+    formatVersion: 3,
     account: user[0] ?? { id: userId, email: null, name: null },
     profile: profile[0]
       ? {
@@ -156,13 +212,15 @@ export async function exportUserDataForUser(
         }
       : null,
     behaviors: userBehaviors,
+    behaviorCategories: categories,
     dailyBehaviorEntries: entries,
     outcomeMetrics: metrics,
     checkIns: userCheckIns,
     checkInValues: values,
     tags: userTags,
     checkInTags: tagLinks,
-    reminderSettings: reminder[0] ?? null,
+    reminderSettings: reminder,
+    reminderDeliveryAttempts: deliveryAttempts,
     pushSubscriptions: subscriptions,
   };
 }
@@ -179,23 +237,34 @@ function trackingDeletes(
   userId: string,
 ): [Statement, ...Statement[]] {
   return [
-    database.delete(checkInTags).where(
-      inArray(
-        checkInTags.checkInId,
-        database
-          .select({ id: checkIns.id })
-          .from(checkIns)
-          .where(eq(checkIns.userId, userId)),
+    database
+      .delete(checkInTags)
+      .where(
+        inArray(
+          checkInTags.checkInId,
+          database
+            .select({ id: checkIns.id })
+            .from(checkIns)
+            .where(eq(checkIns.userId, userId)),
+        ),
       ),
-    ),
     database.delete(checkInValues).where(eq(checkInValues.userId, userId)),
     database.delete(checkIns).where(eq(checkIns.userId, userId)),
-    database.delete(dailyBehaviorEntries).where(eq(dailyBehaviorEntries.userId, userId)),
+    database
+      .delete(dailyBehaviorEntries)
+      .where(eq(dailyBehaviorEntries.userId, userId)),
     database.delete(behaviors).where(eq(behaviors.userId, userId)),
+    database
+      .delete(behaviorCategories)
+      .where(eq(behaviorCategories.userId, userId)),
     database.delete(outcomeMetrics).where(eq(outcomeMetrics.userId, userId)),
     database.delete(tags).where(eq(tags.userId, userId)),
-    database.delete(reminderSettings).where(eq(reminderSettings.userId, userId)),
-    database.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)),
+    database
+      .delete(reminderSettings)
+      .where(eq(reminderSettings.userId, userId)),
+    database
+      .delete(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId)),
   ];
 }
 

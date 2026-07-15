@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 import { users } from "./auth";
+import type { BehaviorCategoryColor } from "@/config/behavior-categories";
 
 /**
  * Application schema (PRD section 22), mapped to SQLite/libSQL.
@@ -41,7 +42,8 @@ const updatedAt = () =>
 export type BehaviorInputType = "boolean" | "numeric";
 export type BehaviorDirection = "increase" | "reduce" | "neutral";
 export type OutcomeInputType = "rating" | "boolean" | "numeric";
-export type OutcomeDirection = "higher_is_better" | "lower_is_better" | "neutral";
+export type OutcomeDirection =
+  "higher_is_better" | "lower_is_better" | "neutral";
 
 // profiles: one row per user, created app-side on the first authenticated request
 // (replaces the old Postgres trigger). week_starts_on: 0 = Sunday ... 6 = Saturday.
@@ -62,7 +64,38 @@ export const profiles = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [check("profile_week_starts_on_ck", sql`${t.weekStartsOn} between 0 and 6`)],
+  (t) => [
+    check("profile_week_starts_on_ck", sql`${t.weekStartsOn} between 0 and 6`),
+  ],
+);
+
+export const behaviorCategories = sqliteTable(
+  "behavior_category",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    color: text("color").$type<BehaviorCategoryColor>().notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("behavior_category_unique_name_per_user").on(
+      t.userId,
+      t.normalizedName,
+    ),
+    index("behavior_category_user_sort_idx").on(t.userId, t.sortOrder),
+    check(
+      "behavior_category_color_ck",
+      sql`${t.color} in ('blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'purple', 'indigo', 'slate')`,
+    ),
+  ],
 );
 
 export const behaviors = sqliteTable(
@@ -74,10 +107,15 @@ export const behaviors = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: text("category_id").references(() => behaviorCategories.id, {
+      onDelete: "set null",
+    }),
     name: text("name").notNull(),
     description: text("description"),
     inputType: text("input_type").$type<BehaviorInputType>().notNull(),
-    desiredDirection: text("desired_direction").$type<BehaviorDirection>().notNull(),
+    desiredDirection: text("desired_direction")
+      .$type<BehaviorDirection>()
+      .notNull(),
     unit: text("unit"),
     customPrompt: text("custom_prompt"),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -88,10 +126,17 @@ export const behaviors = sqliteTable(
   },
   (t) => [
     index("behavior_user_sort_idx").on(t.userId, t.sortOrder),
-    check("behavior_input_type_ck", sql`${t.inputType} in ('boolean', 'numeric')`),
+    check(
+      "behavior_input_type_ck",
+      sql`${t.inputType} in ('boolean', 'numeric')`,
+    ),
     check(
       "behavior_direction_ck",
       sql`${t.desiredDirection} in ('increase', 'reduce', 'neutral')`,
+    ),
+    check(
+      "behavior_category_id_ck",
+      sql`${t.categoryId} is null or length(${t.categoryId}) > 0`,
     ),
   ],
 );
@@ -211,7 +256,10 @@ export const checkInValues = sqliteTable(
   },
   (t) => [
     // One value per outcome metric per check-in (PRD 22).
-    unique("check_in_value_unique_per_metric").on(t.checkInId, t.outcomeMetricId),
+    unique("check_in_value_unique_per_metric").on(
+      t.checkInId,
+      t.outcomeMetricId,
+    ),
     index("check_in_value_metric_idx").on(t.outcomeMetricId),
     check(
       "check_in_value_rating_range_ck",
@@ -257,18 +305,21 @@ export const reminderSettings = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    // One optional daily reminder per user.
     userId: text("user_id")
       .notNull()
-      .unique()
       .references(() => users.id, { onDelete: "cascade" }),
-    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
-    // Local time-of-day 'HH:MM' for the single daily reminder.
+    isEnabled: integer("is_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    // Local time-of-day 'HH:MM' for this daily reminder.
     reminderTime: text("reminder_time"),
     timezone: text("timezone").notNull().default("UTC"),
     // The local calendar date most recently completed by the send job.
     lastSentLocalDate: text("last_sent_local_date"),
     deliveryLocalDate: text("delivery_local_date"),
+    deliveryOccurrenceAt: integer("delivery_occurrence_at", {
+      mode: "timestamp",
+    }),
     deliveryLeaseToken: text("delivery_lease_token"),
     deliveryLeaseExpiresAt: integer("delivery_lease_expires_at", {
       mode: "timestamp",
@@ -278,7 +329,13 @@ export const reminderSettings = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("reminder_setting_due_idx").on(t.isEnabled, t.nextReminderAt)],
+  (t) => [
+    unique("reminder_setting_unique_time_per_user").on(
+      t.userId,
+      t.reminderTime,
+    ),
+    index("reminder_setting_due_idx").on(t.isEnabled, t.nextReminderAt),
+  ],
 );
 
 export const pushSubscriptions = sqliteTable(
@@ -302,7 +359,9 @@ export const pushSubscriptions = sqliteTable(
     lastReminderAttemptAt: integer("last_reminder_attempt_at", {
       mode: "timestamp",
     }),
-    reminderFailureCount: integer("reminder_failure_count").notNull().default(0),
+    reminderFailureCount: integer("reminder_failure_count")
+      .notNull()
+      .default(0),
     reminderQuarantinedAt: integer("reminder_quarantined_at", {
       mode: "timestamp",
     }),
@@ -314,6 +373,41 @@ export const pushSubscriptions = sqliteTable(
       t.reminderQuarantinedAt,
       t.lastReminderLocalDate,
       t.lastReminderAttemptAt,
+    ),
+  ],
+);
+
+export const reminderDeliveryAttempts = sqliteTable(
+  "reminder_delivery_attempt",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    reminderId: text("reminder_id")
+      .notNull()
+      .references(() => reminderSettings.id, { onDelete: "cascade" }),
+    subscriptionId: text("subscription_id")
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+    occurrenceAt: integer("occurrence_at", { mode: "timestamp" }).notNull(),
+    localDate: text("local_date").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastAttemptAt: integer("last_attempt_at", { mode: "timestamp" }),
+    deliveredAt: integer("delivered_at", { mode: "timestamp" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("reminder_delivery_attempt_occurrence_unique").on(
+      t.reminderId,
+      t.subscriptionId,
+      t.occurrenceAt,
+    ),
+    index("reminder_delivery_attempt_pending_idx").on(
+      t.reminderId,
+      t.occurrenceAt,
+      t.deliveredAt,
+      t.lastAttemptAt,
     ),
   ],
 );

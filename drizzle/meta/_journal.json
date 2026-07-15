@@ -43,6 +43,27 @@
       "when": 1784072984128,
       "tag": "0005_lovely_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784091312809,
+      "tag": "0006_wild_stepford_cuckoos",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784091400325,
+      "tag": "0007_wakeful_maelstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784092495974,
+      "tag": "0008_equal_barracuda",
+      "breakpoints": true
     }
   ]
 }

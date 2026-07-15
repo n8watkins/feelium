@@ -5,10 +5,13 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { BehaviorLogRow } from "@/components/tracking/behavior-log-row";
+import { CategoryBadge } from "@/components/tracking/category-badge";
 import { SavedCheckInToast } from "@/components/tracking/saved-check-in-toast";
 import { Button } from "@/components/ui/button";
+import { BEHAVIOR_CATEGORY_COLOR_STYLES } from "@/config/behavior-categories";
 import { formatOutcomeValue } from "@/config/tracking";
 import { dateISOInTimeZone, DEFAULT_TIME_ZONE } from "@/lib/date";
+import { cn } from "@/lib/utils";
 import {
   countCheckInsForDate,
   getEntriesForDate,
@@ -16,6 +19,7 @@ import {
   getCurrentProfile,
   getTrackingCounts,
   listActiveBehaviors,
+  listBehaviorCategories,
 } from "@/server/data";
 
 export default async function TodayPage({
@@ -41,12 +45,33 @@ export default async function TodayPage({
   });
   const localDate = dateISOInTimeZone(now, timeZone);
 
-  const [behaviors, entries, checkInsToday, latest] = await Promise.all([
-    listActiveBehaviors(),
-    getEntriesForDate(localDate),
-    countCheckInsForDate(localDate),
-    getLatestCheckIn(),
-  ]);
+  const [behaviors, categories, entries, checkInsToday, latest] =
+    await Promise.all([
+      listActiveBehaviors(),
+      listBehaviorCategories(),
+      getEntriesForDate(localDate),
+      countCheckInsForDate(localDate),
+      getLatestCheckIn(),
+    ]);
+  const behaviorGroups: {
+    category: (typeof categories)[number] | null;
+    behaviors: typeof behaviors;
+  }[] = categories
+    .map((category) => ({
+      category,
+      behaviors: behaviors.filter(
+        (behavior) => behavior.categoryId === category.id,
+      ),
+    }))
+    .filter((group) => group.behaviors.length > 0);
+  const uncategorized = behaviors.filter(
+    (behavior) =>
+      !behavior.categoryId ||
+      !categories.some((category) => category.id === behavior.categoryId),
+  );
+  if (uncategorized.length > 0) {
+    behaviorGroups.push({ category: null, behaviors: uncategorized });
+  }
 
   return (
     <>
@@ -83,25 +108,56 @@ export default async function TodayPage({
             />
           ) : (
             <>
-              <ul className="space-y-2">
-                {behaviors.map((behavior) => {
-                  const entry = entries.get(behavior.id);
-                  return (
-                    <BehaviorLogRow
-                      key={behavior.id}
-                      behavior={{
-                        id: behavior.id,
-                        name: behavior.name,
-                        inputType: behavior.inputType,
-                        unit: behavior.unit,
-                      }}
-                      entryDate={localDate}
-                      booleanValue={entry?.booleanValue ?? null}
-                      numericValue={entry?.numericValue ?? null}
-                    />
-                  );
-                })}
-              </ul>
+              <div className="space-y-5">
+                {behaviorGroups.map((group) => (
+                  <section
+                    key={group.category?.id ?? "uncategorized"}
+                    aria-labelledby={`behavior-group-${group.category?.id ?? "uncategorized"}`}
+                    className={cn(
+                      "space-y-2 border-l-2 pl-3",
+                      group.category
+                        ? BEHAVIOR_CATEGORY_COLOR_STYLES[group.category.color]
+                            .accent
+                        : "border-border",
+                    )}
+                  >
+                    <h3
+                      id={`behavior-group-${group.category?.id ?? "uncategorized"}`}
+                    >
+                      {group.category ? (
+                        <CategoryBadge
+                          name={group.category.name}
+                          color={group.category.color}
+                        />
+                      ) : (
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Uncategorized
+                        </span>
+                      )}
+                    </h3>
+                    <ul className="space-y-2">
+                      {group.behaviors.map((behavior) => {
+                        const entry = entries.get(behavior.id);
+                        return (
+                          <BehaviorLogRow
+                            key={behavior.id}
+                            behavior={{
+                              id: behavior.id,
+                              name: behavior.name,
+                              inputType: behavior.inputType,
+                              unit: behavior.unit,
+                            }}
+                            entryDate={localDate}
+                            booleanValue={entry?.booleanValue ?? null}
+                            numericValue={entry?.numericValue ?? null}
+                            editHref={`/settings/behaviors/${behavior.id}?from=/today`}
+                          />
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
               <Button asChild variant="outline" className="w-full">
                 <Link href="/settings/behaviors/new?from=/today">
                   <Plus className="size-4" aria-hidden="true" />

@@ -82,7 +82,7 @@ This is the deliberate replacement for the PRD's Postgres RLS. See `docs/DEVIATI
 
 ### Data-access submodules (`src/server/data/`)
 
-`profile`, `profile-operations`, `behaviors`, `outcomes`, `tags`, `entries`, `checkins`, `checkin-writes`, `history`, `analytics`, `starter`, `notifications`, `reminder-operations`, `account`, `account-ops`, plus `session`/`errors` helpers.
+`profile`, `profile-operations`, `behaviors`, `categories`, `outcomes`, `tags`, `entries`, `checkins`, `checkin-writes`, `history`, `analytics`, `starter`, `notifications`, `reminder-schedule-operations`, `reminder-operations`, `reminder-delivery-operations`, `account`, `account-ops`, plus `session`/`errors` helpers.
 The `*-operations.ts` modules are kept **session-free** on purpose so integration tests can exercise atomic data operations against a scratch libSQL/Turso target without the Next runtime.
 
 ### Auth flow
@@ -99,13 +99,15 @@ Auth tables (adapter): `user` (includes a `passwordHash` column for the disabled
 Product tables:
 
 - `profile` - one per user: display name, timezone, one-time device-timezone sync state, and week-starts-on.
-- `behavior` - boolean or numeric; desired direction (increase/reduce/neutral); optional unit and custom prompt; sort order; archive flag.
+- `behavior_category` - user-owned category names, constrained colors, and explicit sort order.
+- `behavior` - boolean or numeric; optional category; desired direction (increase/reduce/neutral); optional unit and custom prompt; sort order; archive flag.
 - `daily_behavior_entry` - one per behavior per day (unique); boolean and numeric values both nullable.
 - `outcome_metric` - rating (1-5), boolean, or numeric; optional desired direction; sort order; archive flag.
 - `check_in` - a point-in-time entry (local date + timestamp + note).
 - `check_in_value` - one per outcome metric per check-in (unique); rating/boolean/numeric all nullable.
 - `tag` and `check_in_tag` - free-form tags (unique name per user) linked many-to-many to check-ins.
-- `reminder_setting` - one optional daily reminder per user, including persisted scheduling and delivery state described in `docs/notifications-and-pwa.md`.
+- `reminder_setting` - any number of daily reminders per user, each with independent enabled, time, timezone, scheduling, and lease state.
+- `reminder_delivery_attempt` - per-reminder, per-occurrence, per-device delivery progress used for retry-safe multi-reminder sends.
 - `push_subscription` - Web Push subscriptions per user/endpoint.
 
 ---
@@ -120,7 +122,7 @@ Full setup is in `README.md`; the short version:
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
-Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
+Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:categories`, `test:e2e`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
 
 ---
 
@@ -136,7 +138,9 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 ### Today
 
 - Primary "Check in now" action into the check-in flow.
+- Active behaviors are grouped by ordered, color-coded categories, with Uncategorized last and behavior order preserved inside each group.
 - Inline logging for each active behavior directly on Today: Yes/No for boolean behaviors, a numeric stepper (with unit pluralization) for numeric behaviors.
+- Every Today behavior has a direct edit action that returns to Today after saving.
 - Add a new behavior inline without leaving Today.
 - Shows the latest check-in and a count of today's check-ins.
 
@@ -170,8 +174,9 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 ### Settings
 
 - **Behaviors / Outcomes:** full CRUD, reorder, archive-with-confirmation, and reactivate. Input type locks once entries/values exist (to protect stored data).
+- **Behavior categories:** create, rename, recolor, reorder, and delete categories without deleting assigned behaviors.
 - **Tags:** list, rename, delete.
-- **Notifications:** enable a single daily reminder (time + timezone), manage Web Push permission and subscriptions, and send a test push.
+- **Notifications:** create, edit, pause, enable, and delete any number of daily reminders; manage Web Push permission and device subscriptions separately; and send a test push.
 - **Data:** export everything as JSON, delete all tracking data (keeps the account), or delete the account entirely.
 - **Privacy:** a static explainer page.
 - **Preferences:** theme (light/dark/system), timezone, and start of week are editable.
@@ -211,7 +216,7 @@ These are intentionally out of scope for the MVP and should only be built once t
 - Next-day outcome comparisons.
 - **Numeric correlation analysis** (beyond the current group-average comparison; scatter plots, coefficients).
 - Custom behavior goals and range-based targets.
-- Behavior reminders (distinct from the single daily check-in reminder).
+- Behavior-specific reminders, distinct from the configurable daily check-in reminder list.
 - Formal personal experiments.
 - **Weekly reports.**
 - Health and screen-time integrations.
@@ -227,8 +232,8 @@ These are intentionally out of scope for the MVP and should only be built once t
 - **Production has no seed/demo data.** Turso in prod starts empty; every account is a fresh GitHub sign-in. `npm run db:seed` is local-only.
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).
 - **Offline data entry is out of scope** for this MVP by design (PRD 18). The service worker caches assets, not HTML.
-- **Browser automation requires an auth setup.** Supply a disposable `AUTH_SECRET` and an authenticated test session before verifying protected routes.
-- **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, validation, and security headers; integration tests cover atomic data operations, fresh and legacy migrations, plus real Turso HTTP persistence.
+- **Browser automation uses a disposable authenticated session.** `npm run test:e2e` resets `.data/e2e.db`, migrates and seeds it, signs an Auth.js test JWT, and exercises protected routes in Chromium without enabling a production login method.
+- **Coverage is focused rather than exhaustive.** Unit tests cover dates, reminders, analytics, validation, and security headers; integration tests cover behavior categories, multi-reminder ownership and delivery, atomic data operations, fresh and legacy migrations, plus real Turso HTTP persistence.
 
 ---
 
@@ -239,4 +244,4 @@ Small, high-value polishes (listed, not implemented):
 - **Whole-number stepper for integer units** (e.g. cups) to avoid decimal input where it makes no sense.
 - **Ship a favicon.ico.** `config/branding.ts` references `/favicon.ico`, but only `icon.svg` and the PNGs exist in `public/`.
 - **Point at a custom domain** and update `AUTH_URL` + the GitHub OAuth callback, retiring the `-sandy` suffix.
-- **Add a lightweight smoke/E2E test** for the core loop (sign in, add behavior, check in, see it in history/insights) so regressions surface without a real browser.
+- **Expand the authenticated E2E suite** to cover the full check-in, History, and Insights loop.
