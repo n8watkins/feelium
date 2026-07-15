@@ -38,9 +38,10 @@ export function TimezoneSync({
 
     if (!shouldSync) {
       Promise.resolve().then(() => {
-        if (
-          !cancelled &&
-          detected !== currentTimeZone &&
+        if (cancelled) return;
+        if (detected === currentTimeZone) {
+          setDetectedTimeZone(null);
+        } else if (
           localStorage.getItem(dismissalKey(currentTimeZone, detected)) !== "dismissed"
         ) {
           setDetectedTimeZone(detected);
