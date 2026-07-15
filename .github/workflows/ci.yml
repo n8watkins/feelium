@@ -35,6 +35,8 @@ jobs:
         run: npm test
       - name: Test atomic data operations
         run: npm run test:data-operations
+      - name: Test behavior categories
+        run: npm run test:categories
       - name: Test fresh and legacy database migrations
         run: npm run test:migrations
       - name: Install Turso CLI and libSQL server
