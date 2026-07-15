@@ -126,6 +126,9 @@ test("account export and tracking deletion include behavior categories", async (
     await client.execute(
       "insert into user (id, email) values ('owner', 'owner@example.test')",
     );
+    await client.execute(
+      "insert into user (id, email) values ('other', 'other@example.test')",
+    );
     const category = await createBehaviorCategoryForUser(
       database,
       "owner",
@@ -137,6 +140,28 @@ test("account export and tracking deletion include behavior categories", async (
         values ('walk', 'owner', ?, 'Walk', 'boolean', 'increase', 1, 1)`,
       args: [category.id],
     });
+    await client.executeMultiple(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+        values
+          ('owner-reminder', 'owner', 1, '08:00', 'UTC', 1, 1),
+          ('other-reminder', 'other', 1, '09:00', 'UTC', 1, 1);
+      insert into push_subscription
+        (id, user_id, endpoint, subscription_data, created_at)
+        values
+          ('owner-subscription', 'owner', 'https://owner.example.test', '{}', 1),
+          ('other-subscription', 'other', 'https://other.example.test', '{}', 1);
+      insert into reminder_delivery_attempt
+        (id, reminder_id, subscription_id, occurrence_at, local_date,
+         attempt_count, created_at, updated_at)
+        values
+          ('owner-attempt', 'owner-reminder', 'owner-subscription', 1,
+           '2026-07-15', 1, 1, 1),
+          ('other-attempt', 'other-reminder', 'other-subscription', 1,
+           '2026-07-15', 1, 1, 1),
+          ('cross-owner-attempt', 'owner-reminder', 'other-subscription', 2,
+           '2026-07-15', 1, 2, 2);
+    `);
 
     const exported = await exportUserDataForUser(
       database,
@@ -146,6 +171,10 @@ test("account export and tracking deletion include behavior categories", async (
     assert.equal(exported.formatVersion, 3);
     assert.equal(exported.behaviorCategories[0]?.id, category.id);
     assert.equal(exported.behaviors[0]?.categoryId, category.id);
+    assert.deepEqual(
+      exported.reminderDeliveryAttempts.map((attempt) => attempt.id),
+      ["owner-attempt"],
+    );
 
     await deleteAllTrackingDataForUser(database, "owner");
     assert.equal(
@@ -170,7 +199,7 @@ test("account export and tracking deletion include behavior categories", async (
         (await client.execute("select count(*) as count from user")).rows[0]
           ?.count,
       ),
-      1,
+      2,
     );
   } finally {
     client.close();

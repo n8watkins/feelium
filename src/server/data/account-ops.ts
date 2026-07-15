@@ -1,6 +1,6 @@
 import type { BatchItem } from "drizzle-orm/batch";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import * as schema from "@/db/schema";
 import {
@@ -14,6 +14,7 @@ import {
   outcomeMetrics,
   profiles,
   pushSubscriptions,
+  reminderDeliveryAttempts,
   reminderSettings,
   sessions,
   tags,
@@ -63,6 +64,7 @@ export type UserDataExport = {
   tags: (typeof tags.$inferSelect)[];
   checkInTags: { checkInId: string; tagId: string; tagName: string }[];
   reminderSettings: (typeof reminderSettings.$inferSelect)[];
+  reminderDeliveryAttempts: (typeof reminderDeliveryAttempts.$inferSelect)[];
   pushSubscriptions: (typeof pushSubscriptions.$inferSelect)[];
 };
 
@@ -88,6 +90,7 @@ export async function exportUserDataForUser(
     userTags,
     tagLinks,
     reminder,
+    deliveryAttempts,
     subscriptions,
   ] = await Promise.all([
     database
@@ -156,6 +159,38 @@ export async function exportUserDataForUser(
         asc(reminderSettings.createdAt),
       ),
     database
+      .select({
+        id: reminderDeliveryAttempts.id,
+        reminderId: reminderDeliveryAttempts.reminderId,
+        subscriptionId: reminderDeliveryAttempts.subscriptionId,
+        occurrenceAt: reminderDeliveryAttempts.occurrenceAt,
+        localDate: reminderDeliveryAttempts.localDate,
+        attemptCount: reminderDeliveryAttempts.attemptCount,
+        lastAttemptAt: reminderDeliveryAttempts.lastAttemptAt,
+        deliveredAt: reminderDeliveryAttempts.deliveredAt,
+        createdAt: reminderDeliveryAttempts.createdAt,
+        updatedAt: reminderDeliveryAttempts.updatedAt,
+      })
+      .from(reminderDeliveryAttempts)
+      .innerJoin(
+        reminderSettings,
+        eq(reminderDeliveryAttempts.reminderId, reminderSettings.id),
+      )
+      .innerJoin(
+        pushSubscriptions,
+        eq(reminderDeliveryAttempts.subscriptionId, pushSubscriptions.id),
+      )
+      .where(
+        and(
+          eq(reminderSettings.userId, userId),
+          eq(pushSubscriptions.userId, userId),
+        ),
+      )
+      .orderBy(
+        asc(reminderDeliveryAttempts.occurrenceAt),
+        asc(reminderDeliveryAttempts.createdAt),
+      ),
+    database
       .select()
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.userId, userId))
@@ -185,6 +220,7 @@ export async function exportUserDataForUser(
     tags: userTags,
     checkInTags: tagLinks,
     reminderSettings: reminder,
+    reminderDeliveryAttempts: deliveryAttempts,
     pushSubscriptions: subscriptions,
   };
 }
