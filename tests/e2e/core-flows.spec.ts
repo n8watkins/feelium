@@ -1,7 +1,8 @@
-import { createClient } from "@libsql/client";
-import { expect, test, type Page } from "@playwright/test";
+import { createClient, type Client } from "@libsql/client";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { encode } from "next-auth/jwt";
 
+const BASE_URL = "http://127.0.0.1:3100";
 const DATABASE_URL = "file:./.data/e2e.db";
 const SESSION_COOKIE = "authjs.session-token";
 const SESSION_SECRET = "feelium-e2e-secret-not-for-production";
@@ -21,70 +22,47 @@ function captureProductErrors(page: Page, errors: string[]) {
   });
 }
 
-test("preferences, categories, Today editing, and reminders work together", async ({
-  browser,
-  context,
-  page,
-}, testInfo) => {
-  const database = createClient({ url: DATABASE_URL });
-  const [user] = (
-    await database.execute(
-      "select id, email from user where email = 'demo@example.com'",
-    )
-  ).rows;
-  expect(user?.id).toBeTruthy();
+async function resetUserState(database: Client, userId: string) {
   await database.execute({
     sql: "update behavior set category_id = null where user_id = ?",
-    args: [user.id],
+    args: [userId],
   });
   await database.execute({
     sql: "delete from behavior_category where user_id = ?",
-    args: [user.id],
+    args: [userId],
   });
   await database.execute({
     sql: "delete from reminder_setting where user_id = ?",
-    args: [user.id],
+    args: [userId],
   });
   await database.execute({
     sql: `update profile
       set timezone = 'UTC', auto_sync_timezone = 0, week_starts_on = 1
       where user_id = ?`,
-    args: [user.id],
+    args: [userId],
   });
+}
 
-  const token = await encode({
-    token: {
-      sub: String(user.id),
-      id: String(user.id),
-      email: String(user.email),
-      name: "Demo",
-    },
-    secret: SESSION_SECRET,
-    salt: SESSION_COOKIE,
-    maxAge: 60 * 60,
-  });
-  const sessionCookie = {
-    name: SESSION_COOKIE,
-    value: token,
-    url: "http://127.0.0.1:3100",
-    httpOnly: true,
-    sameSite: "Lax" as const,
-  };
-  await context.addCookies([sessionCookie]);
-
-  const errors: string[] = [];
-  captureProductErrors(page, errors);
-
+async function exerciseCoreFlows(
+  page: Page,
+  platform: "desktop" | "mobile",
+  testInfo: TestInfo,
+) {
   await page.goto("/settings");
   const timezonePrompt = page.getByRole("complementary", {
     name: "Use this device's timezone?",
   });
   await expect(timezonePrompt).toBeVisible();
-  await page.locator('select[name="timezone"]').selectOption("America/Los_Angeles");
+  await timezonePrompt
+    .getByRole("button", { name: "Use America/Los Angeles" })
+    .click();
+  await expect(timezonePrompt).toBeHidden();
+  await expect(page.locator('select[name="timezone"]')).toHaveValue(
+    "America/Los_Angeles",
+  );
   await page.locator('select[name="weekStartsOn"]').selectOption("0");
   await page.getByRole("button", { name: "Save preferences" }).click();
   await expect(page.getByText("Preferences saved.")).toBeVisible();
-  await expect(timezonePrompt).toBeHidden();
   await page.reload();
   await expect(page.locator('select[name="timezone"]')).toHaveValue(
     "America/Los_Angeles",
@@ -122,34 +100,83 @@ test("preferences, categories, Today editing, and reminders work together", asyn
       .getByText("Exercise", { exact: true }),
   ).toBeVisible();
 
-  await page.goto("/settings/notifications");
-  for (const time of ["08:00", "18:30"]) {
-    await page.getByRole("button", { name: "Add reminder" }).click();
-    await page.getByLabel("New reminder time").fill(time);
-    await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(page.getByText("Reminder added.")).toBeVisible();
-  }
-  await expect(page.getByText("8:00 AM", { exact: true })).toBeVisible();
-  await expect(page.getByText("6:30 PM", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(
-    page.getByRole("button", { name: /^Delete .* reminder$/ }),
-  ).toHaveCount(2);
-
-  const desktopScreenshot = testInfo.outputPath("today-desktop.png");
-  await page.goto("/today");
   await page.waitForLoadState("networkidle");
+  const todayScreenshot = testInfo.outputPath(`today-${platform}.png`);
   await page.screenshot({
-    path: desktopScreenshot,
+    path: todayScreenshot,
     fullPage: true,
     caret: "initial",
   });
-  await testInfo.attach("Today desktop", {
-    path: desktopScreenshot,
+  await testInfo.attach(`Today ${platform}`, {
+    path: todayScreenshot,
     contentType: "image/png",
   });
 
+  await page.goto("/settings/notifications");
+  for (const [time, label] of [
+    ["08:00", "8:00 AM"],
+    ["18:30", "6:30 PM"],
+  ] as const) {
+    await page.getByRole("button", { name: "Add reminder" }).click();
+    await page.getByLabel("New reminder time").fill(time);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+  }
+  await expect(
+    page.getByRole("button", { name: /^Delete .* reminder$/ }),
+  ).toHaveCount(2);
+  await page.reload();
+  await expect(page.getByText("8:00 AM", { exact: true })).toBeVisible();
+  await expect(page.getByText("6:30 PM", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Delete .* reminder$/ }),
+  ).toHaveCount(2);
+}
+
+test("preferences, categories, Today editing, and reminders work together", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  const database = createClient({ url: DATABASE_URL });
+  const [user] = (
+    await database.execute(
+      "select id, email from user where email = 'demo@example.com'",
+    )
+  ).rows;
+  expect(user?.id).toBeTruthy();
+  const userId = String(user.id);
+  await resetUserState(database, userId);
+
+  const token = await encode({
+    token: {
+      sub: userId,
+      id: userId,
+      email: String(user.email),
+      name: "Demo",
+    },
+    secret: SESSION_SECRET,
+    salt: SESSION_COOKIE,
+    maxAge: 60 * 60,
+  });
+  const sessionCookie = {
+    name: SESSION_COOKIE,
+    value: token,
+    url: BASE_URL,
+    httpOnly: true,
+    sameSite: "Lax" as const,
+  };
+  await context.addCookies([sessionCookie]);
+
+  const errors: string[] = [];
+  captureProductErrors(page, errors);
+
+  await exerciseCoreFlows(page, "desktop", testInfo);
+
+  await resetUserState(database, userId);
+
   const mobileContext = await browser.newContext({
+    baseURL: BASE_URL,
     colorScheme: "dark",
     timezoneId: "America/Los_Angeles",
     viewport: { width: 390, height: 844 },
@@ -157,9 +184,7 @@ test("preferences, categories, Today editing, and reminders work together", asyn
   await mobileContext.addCookies([sessionCookie]);
   const mobilePage = await mobileContext.newPage();
   captureProductErrors(mobilePage, errors);
-  await mobilePage.goto("/settings/notifications");
-  await expect(mobilePage.getByText("8:00 AM", { exact: true })).toBeVisible();
-  await expect(mobilePage.getByText("6:30 PM", { exact: true })).toBeVisible();
+  await exerciseCoreFlows(mobilePage, "mobile", testInfo);
   await mobilePage.waitForLoadState("networkidle");
   const mobileScreenshot = testInfo.outputPath("reminders-mobile.png");
   await mobilePage.screenshot({
@@ -174,17 +199,17 @@ test("preferences, categories, Today editing, and reminders work together", asyn
 
   const profile = await database.execute({
     sql: "select timezone, week_starts_on from profile where user_id = ?",
-    args: [user.id],
+    args: [userId],
   });
   const reminders = await database.execute({
     sql: "select reminder_time, timezone from reminder_setting where user_id = ? order by reminder_time",
-    args: [user.id],
+    args: [userId],
   });
   const assignedBehavior = await database.execute({
     sql: `select c.name as category_name
       from behavior b join behavior_category c on c.id = b.category_id
       where b.user_id = ? and b.name = 'Exercise'`,
-    args: [user.id],
+    args: [userId],
   });
   expect(profile.rows[0]).toEqual({
     timezone: "America/Los_Angeles",
