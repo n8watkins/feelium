@@ -3,10 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import {
-  isBehaviorDirection,
-  isBehaviorInputType,
-} from "@/config/tracking";
+import { isBehaviorDirection, isBehaviorInputType } from "@/config/tracking";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import {
   MAX_DESCRIPTION_LENGTH,
@@ -154,7 +151,12 @@ export async function updateBehaviorAction(
   }
 
   revalidatePath(LIST_PATH);
-  redirect(LIST_PATH);
+  const destination = safeRedirectPath(
+    String(formData.get("from") ?? ""),
+    LIST_PATH,
+  );
+  revalidatePath(destination);
+  redirect(destination);
 }
 
 export async function archiveBehaviorAction(formData: FormData) {

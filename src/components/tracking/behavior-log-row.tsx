@@ -1,6 +1,7 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Pencil } from "lucide-react";
+import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -24,11 +25,13 @@ export function BehaviorLogRow({
   entryDate,
   booleanValue,
   numericValue,
+  editHref,
 }: {
   behavior: BehaviorForRow;
   entryDate: string;
   booleanValue: boolean | null;
   numericValue: number | null;
+  editHref?: string;
 }) {
   if (behavior.inputType === "boolean") {
     return (
@@ -36,6 +39,7 @@ export function BehaviorLogRow({
         behavior={behavior}
         entryDate={entryDate}
         serverValue={booleanValue}
+        editHref={editHref}
       />
     );
   }
@@ -44,6 +48,7 @@ export function BehaviorLogRow({
       behavior={behavior}
       entryDate={entryDate}
       serverValue={numericValue}
+      editHref={editHref}
     />
   );
 }
@@ -52,18 +57,31 @@ function RowShell({
   name,
   recorded,
   children,
+  editHref,
 }: {
   name: string;
   recorded: boolean;
   children: React.ReactNode;
+  editHref?: string;
 }) {
   return (
     <li className="rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{name}</span>
-        {!recorded ? (
-          <span className="text-xs text-muted-foreground">Not recorded</span>
-        ) : null}
+        <span className="flex items-center gap-1">
+          {!recorded ? (
+            <span className="text-xs text-muted-foreground">Not recorded</span>
+          ) : null}
+          {editHref ? (
+            <Link
+              href={editHref}
+              className="inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`Edit ${name}`}
+            >
+              <Pencil className="size-4" aria-hidden="true" />
+            </Link>
+          ) : null}
+        </span>
       </div>
       <div className="mt-3">{children}</div>
     </li>
@@ -74,10 +92,12 @@ function BooleanControl({
   behavior,
   entryDate,
   serverValue,
+  editHref,
 }: {
   behavior: BehaviorForRow;
   entryDate: string;
   serverValue: boolean | null;
+  editHref?: string;
 }) {
   const [value, setValue] = useOptimistic<boolean | null, boolean | null>(
     serverValue,
@@ -101,7 +121,11 @@ function BooleanControl({
   }
 
   return (
-    <RowShell name={behavior.name} recorded={value !== null}>
+    <RowShell
+      name={behavior.name}
+      recorded={value !== null}
+      editHref={editHref}
+    >
       <div
         role="group"
         aria-label={behavior.name}
@@ -153,10 +177,12 @@ function NumericControl({
   behavior,
   entryDate,
   serverValue,
+  editHref,
 }: {
   behavior: BehaviorForRow;
   entryDate: string;
   serverValue: number | null;
+  editHref?: string;
 }) {
   const [value, setValue] = useOptimistic<number | null, number | null>(
     serverValue,
@@ -180,7 +206,11 @@ function NumericControl({
   }
 
   return (
-    <RowShell name={behavior.name} recorded={value !== null}>
+    <RowShell
+      name={behavior.name}
+      recorded={value !== null}
+      editHref={editHref}
+    >
       <NumericStepper
         value={value}
         onChange={commit}
