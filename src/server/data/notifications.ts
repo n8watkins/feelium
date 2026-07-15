@@ -219,7 +219,7 @@ export async function disableInvalidReminder(
 }
 
 /**
- * Atomically reserves one reminder delivery for a user's local calendar date.
+ * Atomically reserves one reminder occurrence for a user's local calendar date.
  * Only one overlapping cron invocation can receive a successful claim.
  */
 export async function claimReminderDelivery(

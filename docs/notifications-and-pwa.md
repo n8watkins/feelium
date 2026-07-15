@@ -7,9 +7,11 @@ This document covers the Progressive Web App and the daily-reminder notification
 - A web app manifest driven from `src/config/branding.ts`, served at `/manifest.webmanifest`.
 - Installable PWA: standalone display, home-screen install, rasterized icons plus a maskable icon and an iOS apple-touch icon.
 - A service worker (`public/sw.js`) with basic static-asset caching, Web Push handling, and deep links from notifications.
-- Exactly one optional daily reminder per user (enabled, time, timezone), stored in `reminder_setting`.
+- Any number of daily reminders per user, each with its own enabled state, local time, timezone, and persisted next occurrence in `reminder_setting`.
+- Per-device delivery progress keyed by reminder ID and scheduled occurrence in `reminder_delivery_attempt`.
 - Web Push subscriptions stored in `push_subscription`, with permission handling and graceful fallbacks.
-- A `Settings > Notifications` screen to enable the reminder, pick a time, view permission status, and send a test.
+- A `Settings > Notifications` screen to add, edit, pause, enable, and delete reminder times independently.
+- Device setup, notification permission, subscription removal, and test sends are separate from schedule management.
 - A scheduled send endpoint that a production cron drives.
 
 Offline data entry is intentionally out of scope for this MVP (PRD 18).
@@ -70,16 +72,17 @@ Scheduled workflows run from the default branch, so merge the workflow before ex
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
-- Each user's delivery has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
+- Each reminder occurrence has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
 - Delivery progress mutations are fenced by the active lease, but Web Push dispatch and its database marker cannot be atomic; a crash or lease loss between them can cause a successful push to be retried, so dispatch remains intentionally at least once.
-- Each invocation attempts at most 25 subscriptions per user and records successful devices individually.
+- Each invocation attempts at most 25 subscriptions per reminder occurrence and records successful devices individually.
+- Delivery identity includes the reminder ID and scheduled occurrence, so two reminders on the same local day can both reach the same device.
 - Unattempted and transiently failed devices remain pending in a fair resumable queue, even when other devices succeeded or expired subscriptions were pruned.
 - A subscription is quarantined after three consecutive transient failures so a permanently failing endpoint cannot block later daily occurrences; refreshing its browser subscription clears the quarantine.
 - Incomplete deliveries release their lease and move one minute later in the due queue without losing the original local occurrence or starving other candidates.
 - Invalid legacy schedules are disabled with an atomic snapshot check, so they cannot permanently occupy the bounded queue or disable a concurrently corrected reminder.
 - Push requests have a one-second socket timeout and run with bounded user and subscription concurrency, so unreachable endpoints cannot hold the scheduled invocation open one subscription at a time.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
-- `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
+- `?dryRun=1` reports which reminder occurrences are due without sending. `?window=N` widens the match (clamped to 60).
 
 The committed schedule runs every five minutes and retries transient HTTP failures without allowing overlapping workflow runs.
 Configure these GitHub repository settings before enabling reminders in production:
@@ -97,7 +100,7 @@ A manual test send (to the current user's own devices, ignoring the schedule) is
 1. Copy `.env.local.example` to `.env.local` and fill in the VAPID keys, a `CRON_SECRET`, and `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` (GitHub is the only sign-in method - see [DEVIATIONS ADR-002](DEVIATIONS.md)).
 2. `npm run db:migrate` then `npm run db:seed` for demo tracking data. (The seeded `demo@example.com` password login no longer works - sign in with GitHub.)
 3. `npm run dev -- -p 3002` (or any port).
-4. Sign in with GitHub, open `Settings > Notifications`, allow notifications, and turn on the daily reminder.
+4. Sign in with GitHub, open `Settings > Notifications`, add at least two reminder times, and set up the current device.
 5. Trigger a scheduled send locally:
 
 ```
@@ -110,9 +113,10 @@ Web Push and service workers require a secure context.
 
 ## Browser support and graceful degradation (PRD 23)
 
-- If the browser lacks service workers, `PushManager`, or the Notification API, the settings screen shows that reminders are unavailable and that the user can still check in anytime.
-- If the user denies (blocks) notification permission, the screen shows a clear "blocked" status with instructions to re-allow, and the reminder cannot be delivered until they do. Checking in is never blocked.
-- If the server has no VAPID keys, the screen explains that delivery is unavailable.
+- If the browser lacks service workers, `PushManager`, or the Notification API, the settings screen keeps schedule management available and explains that this browser cannot receive deliveries.
+- If the user denies notification permission, the screen shows a clear blocked status with instructions to re-allow it.
+  Reminder schedules and check-ins remain available.
+- If the server has no VAPID keys, the screen explains that delivery is unavailable while still allowing reminder times to be managed.
 - iOS supports Web Push only for apps installed to the home screen (iOS 16.4+). Installing the PWA is required there before reminders can be delivered.
 
 ## Verification notes
@@ -120,9 +124,9 @@ Web Push and service workers require a secure context.
 Verified locally against a real Chromium over CDP:
 
 - Manifest and service worker serve correctly; the worker registers and reaches the `activated` state with no console errors.
-- The reminder settings save and the permission status reflects the browser state.
-- Enabling the reminder creates a real Web Push subscription (FCM endpoint), stored in `push_subscription`.
-- The scheduled send endpoint delivers to the subscription (`sent: 1`) with timezone-aware due matching.
+- Multiple reminder times can be created, edited, paused, enabled, and deleted independently, with duplicate times rejected.
+- Setting up the device creates a real Web Push subscription (FCM endpoint), stored in `push_subscription`.
+- The scheduled send endpoint delivers distinct same-day reminder occurrences to the subscription with timezone-aware due matching.
 - The notification deep-link target (`/checkin/new`) renders.
 - Denied permission and unsupported browsers are handled gracefully.
 

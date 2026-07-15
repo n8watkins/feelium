@@ -26,7 +26,7 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
  * minutes with `Authorization: Bearer <CRON_SECRET>`; we verify it against the
  * CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
  *
- * For each user with the reminder enabled, if the resolved occurrence in their saved
+ * For each enabled reminder, if the resolved occurrence in its saved
  * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
  * all of their subscribed devices and prune any that are gone.
  *
@@ -118,6 +118,7 @@ async function handle(request: NextRequest) {
     }
   }
   const due = evaluated.filter((reminder) => reminder.due);
+  const dueUsers = new Set(due.map((reminder) => reminder.userId)).size;
 
   if (dryRun) {
     return NextResponse.json({
@@ -126,7 +127,8 @@ async function handle(request: NextRequest) {
       windowMinutes,
       candidates: candidates.length,
       invalidCandidates: invalid.length,
-      dueUsers: due.length,
+      dueUsers,
+      dueReminders: due.length,
       due: due.map((r) => ({
         reminderId: r.id,
         userId: r.userId,
@@ -141,7 +143,7 @@ async function handle(request: NextRequest) {
   let sent = 0;
   let pruned = 0;
   let failed = 0;
-  let claimedUsers = 0;
+  let claimedReminders = 0;
   const disabledInvalid = (
     await Promise.all(invalid.map(disableInvalidReminder))
   ).filter(Boolean).length;
@@ -168,7 +170,7 @@ async function handle(request: NextRequest) {
       if (!claimToken) {
         return;
       }
-      claimedUsers += 1;
+      claimedReminders += 1;
 
       const subscriptions = await listPushSubscriptionsForReminder(
         reminder.id,
@@ -307,8 +309,9 @@ async function handle(request: NextRequest) {
     ok: true,
     candidates: candidates.length,
     disabledInvalid,
-    dueUsers: due.length,
-    claimedUsers,
+    dueUsers,
+    dueReminders: due.length,
+    claimedReminders,
     sent,
     pruned,
     failed,
