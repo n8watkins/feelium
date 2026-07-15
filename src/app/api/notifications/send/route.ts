@@ -22,9 +22,9 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
 /**
  * Scheduled reminder-send endpoint (PRD 17).
  *
- * PRODUCTION: the committed Vercel Cron schedule calls this endpoint every minute.
- * Vercel automatically attaches `Authorization: Bearer <CRON_SECRET>`; we verify it
- * against the CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
+ * PRODUCTION: the committed GitHub Actions schedule calls this endpoint every five
+ * minutes with `Authorization: Bearer <CRON_SECRET>`; we verify it against the
+ * CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
  *
  * For each user with the reminder enabled, if the resolved occurrence in their saved
  * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest) {
   return handle(request);
 }
 
-// Vercel Cron issues GET requests, so support both verbs.
+// Support GET for compatible external schedulers as well as the committed POST workflow.
 export async function GET(request: NextRequest) {
   return handle(request);
 }

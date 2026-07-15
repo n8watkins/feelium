@@ -180,7 +180,7 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 
 - Installable PWA (manifest from `config/branding.ts`, standalone display, raster + maskable + apple-touch icons).
 - Service worker (`public/sw.js`): stale-while-revalidate for static assets, HTML never cached (auth pages stay fresh), Web Push handling, notification deep-link to the check-in screen.
-- A guarded send endpoint (`/api/notifications/send`) that a per-minute cron drives.
+- A guarded send endpoint (`/api/notifications/send`) that a five-minute GitHub Actions schedule drives.
   It queries a bounded due queue, uses timezone-aware and daylight-saving-safe occurrences, retries transient failures fairly, bounds stalled push requests, and prunes dead subscriptions.
   Full detail is in `docs/notifications-and-pwa.md`.
 

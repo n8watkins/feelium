@@ -61,12 +61,12 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 ## Reminder delivery (production)
 
 The actual scheduled send needs a server trigger.
-The committed `vercel.json` schedules the endpoint every minute on Vercel.
-One-minute Vercel Cron schedules require Vercel Pro or higher.
+The committed GitHub Actions workflow calls the endpoint every five minutes, which keeps Vercel Hobby deployments compatible with their once-daily cron limit.
+Scheduled workflows run from the default branch, so merge the workflow before expecting automatic delivery.
 
 `POST` or `GET` `/api/notifications/send`:
 
-- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which Vercel Cron attaches automatically.
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the scheduled workflow attaches.
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
@@ -80,15 +80,14 @@ One-minute Vercel Cron schedules require Vercel Pro or higher.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 
-The committed schedule runs every minute:
+The committed schedule runs every five minutes and retries transient HTTP failures without allowing overlapping workflow runs.
+Configure these GitHub repository settings before enabling reminders in production:
 
-```json
-{
-  "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }]
-}
-```
+- Set the `REMINDER_CRON_URL` Actions variable to the production deployment origin, such as `https://feelium.example`.
+- Set the `CRON_SECRET` Actions secret to the same random value as the production deployment's `CRON_SECRET` environment variable.
 
-Set `CRON_SECRET` as a project environment variable so the endpoint is protected.
+GitHub may delay scheduled workflows during periods of high load.
+The endpoint's ten-minute due window tolerates one delayed five-minute invocation, and the persisted due queue plus retry-safe delivery state protects overlapping or retried requests.
 
 A manual test send (to the current user's own devices, ignoring the schedule) is available from the `Settings > Notifications` screen via "Send a test".
 
