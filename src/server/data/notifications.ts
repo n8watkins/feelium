@@ -39,13 +39,6 @@ import { requireUserId } from "./session";
  *     to the client without the cron secret guard on the send route.
  */
 
-export type ReminderSettings = {
-  isEnabled: boolean;
-  /** Local time-of-day "HH:MM" for the daily reminder, or null if never set. */
-  reminderTime: string | null;
-  timezone: string;
-};
-
 export type ReminderSchedule = ReminderScheduleInput & { id: string };
 
 /** The JSON shape a browser PushSubscription serializes to. */
@@ -55,25 +48,7 @@ export type WebPushSubscriptionJSON = {
   keys: { p256dh: string; auth: string };
 };
 
-const DEFAULT_REMINDER: ReminderSettings = {
-  isEnabled: false,
-  reminderTime: null,
-  timezone: "UTC",
-};
-
 // ---- User-scoped ---------------------------------------------------------------------
-
-/** The current user's reminder settings, or sensible defaults if they have none yet. */
-export async function getReminderSettings(): Promise<ReminderSettings> {
-  const userId = await requireUserId();
-  const [row] = await listRemindersForUser(db, userId);
-  if (!row) return DEFAULT_REMINDER;
-  return {
-    isEnabled: row.isEnabled,
-    reminderTime: row.reminderTime,
-    timezone: row.timezone,
-  };
-}
 
 export async function listReminderSettings(): Promise<ReminderSchedule[]> {
   const userId = await requireUserId();
@@ -118,25 +93,6 @@ export async function deleteReminderSettings(
 ): Promise<boolean> {
   const userId = await requireUserId();
   return deleteReminderForUser(db, userId, reminderId);
-}
-
-/** Creates or updates the current user's single daily reminder. */
-export async function upsertReminderSettings(
-  input: ReminderSettings,
-): Promise<void> {
-  const userId = await requireUserId();
-  if (!input.reminderTime) throw new Error("INVALID_REMINDER_TIME");
-  const schedule: ReminderScheduleInput = {
-    isEnabled: input.isEnabled,
-    reminderTime: input.reminderTime,
-    timezone: input.timezone,
-  };
-  const [existing] = await listRemindersForUser(db, userId);
-  if (existing) {
-    await updateReminderForUser(db, userId, existing.id, schedule);
-  } else {
-    await createReminderForUser(db, userId, schedule);
-  }
 }
 
 /** Keeps an enabled reminder aligned with the browser's current IANA timezone. */
