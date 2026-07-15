@@ -133,11 +133,18 @@ async function exerciseCoreFlows(
   ).toHaveCount(2);
 }
 
+function platformFor(testInfo: TestInfo): "desktop" | "mobile" {
+  if (testInfo.project.name === "desktop" || testInfo.project.name === "mobile") {
+    return testInfo.project.name;
+  }
+  throw new Error(`Unsupported Playwright project: ${testInfo.project.name}`);
+}
+
 test("preferences, categories, Today editing, and reminders work together", async ({
-  browser,
   context,
   page,
 }, testInfo) => {
+  const platform = platformFor(testInfo);
   const database = createClient({ url: DATABASE_URL });
   const [user] = (
     await database.execute(
@@ -171,31 +178,7 @@ test("preferences, categories, Today editing, and reminders work together", asyn
   const errors: string[] = [];
   captureProductErrors(page, errors);
 
-  await exerciseCoreFlows(page, "desktop", testInfo);
-
-  await resetUserState(database, userId);
-
-  const mobileContext = await browser.newContext({
-    baseURL: BASE_URL,
-    colorScheme: "dark",
-    timezoneId: "America/Los_Angeles",
-    viewport: { width: 390, height: 844 },
-  });
-  await mobileContext.addCookies([sessionCookie]);
-  const mobilePage = await mobileContext.newPage();
-  captureProductErrors(mobilePage, errors);
-  await exerciseCoreFlows(mobilePage, "mobile", testInfo);
-  await mobilePage.waitForLoadState("networkidle");
-  const mobileScreenshot = testInfo.outputPath("reminders-mobile.png");
-  await mobilePage.screenshot({
-    path: mobileScreenshot,
-    caret: "initial",
-  });
-  await testInfo.attach("Reminders mobile", {
-    path: mobileScreenshot,
-    contentType: "image/png",
-  });
-  await mobileContext.close();
+  await exerciseCoreFlows(page, platform, testInfo);
 
   const profile = await database.execute({
     sql: "select timezone, week_starts_on from profile where user_id = ?",

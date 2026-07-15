@@ -9,12 +9,25 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: "http://127.0.0.1:3100",
-    colorScheme: "light",
+    locale: "en-US",
     screenshot: "only-on-failure",
     timezoneId: "America/Los_Angeles",
     trace: "retain-on-failure",
     video: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "desktop",
+      use: { colorScheme: "light" },
+    },
+    {
+      name: "mobile",
+      use: {
+        colorScheme: "dark",
+        viewport: { width: 390, height: 844 },
+      },
+    },
+  ],
   webServer: {
     command: "bash scripts/start-e2e-server.sh",
     url: "http://127.0.0.1:3100/login",
