@@ -133,7 +133,7 @@ export default async function SettingsPage() {
               Notifications
             </CardTitle>
             <CardDescription>
-              One optional daily reminder to check in.
+              Optional daily reminders at the times that work for you.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -143,9 +143,9 @@ export default async function SettingsPage() {
                 className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <span className="flex-1">
-                  <span className="block text-sm font-medium">Daily reminder</span>
+                  <span className="block text-sm font-medium">Daily reminders</span>
                   <span className="block text-xs text-muted-foreground">
-                    Enable, set a time, and view permission status
+                    Add times, pause reminders, and view permission status
                   </span>
                 </span>
                 <ChevronRight
