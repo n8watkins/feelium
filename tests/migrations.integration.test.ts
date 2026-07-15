@@ -45,20 +45,34 @@ test("migrations create a fresh database", async () => {
     assert.ok(names.includes("last_sent_local_date"));
     assert.ok(names.includes("next_reminder_at"));
     assert.ok(names.includes("delivery_local_date"));
+    assert.ok(names.includes("delivery_occurrence_at"));
     assert.ok(names.includes("delivery_lease_token"));
     assert.ok(names.includes("delivery_lease_expires_at"));
 
-    const subscriptionColumns = await client.execute("pragma table_info(push_subscription)");
+    const subscriptionColumns = await client.execute(
+      "pragma table_info(push_subscription)",
+    );
     const subscriptionNames = subscriptionColumns.rows.map((row) => row.name);
     assert.ok(subscriptionNames.includes("last_reminder_local_date"));
     assert.ok(subscriptionNames.includes("last_reminder_attempt_at"));
     assert.ok(subscriptionNames.includes("reminder_failure_count"));
     assert.ok(subscriptionNames.includes("reminder_quarantined_at"));
 
-    const profileColumns = await client.execute("pragma table_info(profile)");
-    assert.ok(profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"));
+    const attemptColumns = await client.execute(
+      "pragma table_info(reminder_delivery_attempt)",
+    );
+    assert.ok(
+      attemptColumns.rows.map((row) => row.name).includes("occurrence_at"),
+    );
 
-    const categoryColumns = await client.execute("pragma table_info(behavior_category)");
+    const profileColumns = await client.execute("pragma table_info(profile)");
+    assert.ok(
+      profileColumns.rows.map((row) => row.name).includes("auto_sync_timezone"),
+    );
+
+    const categoryColumns = await client.execute(
+      "pragma table_info(behavior_category)",
+    );
     assert.deepEqual(
       categoryColumns.rows.map((row) => row.name),
       [
@@ -73,7 +87,9 @@ test("migrations create a fresh database", async () => {
       ],
     );
     const behaviorColumns = await client.execute("pragma table_info(behavior)");
-    assert.ok(behaviorColumns.rows.map((row) => row.name).includes("category_id"));
+    assert.ok(
+      behaviorColumns.rows.map((row) => row.name).includes("category_id"),
+    );
 
     await client.batch(
       [
@@ -118,6 +134,9 @@ test("migrations preserve legacy rows that exceed current application limits", a
         `insert into daily_behavior_entry
           (id, user_id, behavior_id, entry_date, numeric_value, created_at, updated_at)
           values ('legacy-entry', 'legacy-user', 'legacy-behavior', '2026-02-30', -1, 1, 1)`,
+        `insert into reminder_setting
+          (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+          values ('legacy-reminder', 'legacy-user', 1, '20:00', 'America/New_York', 1, 2)`,
       ],
       "write",
     );
@@ -141,7 +160,45 @@ test("migrations preserve legacy rows that exceed current application limits", a
       "select category_id from behavior where id = 'legacy-behavior'",
     );
     assert.equal(migratedBehavior.rows[0]?.category_id, null);
-    assert.equal((await client.execute("pragma foreign_key_check")).rows.length, 0);
+    const migratedReminder = await client.execute(
+      `select id, is_enabled, reminder_time, timezone, next_reminder_at
+       from reminder_setting where id = 'legacy-reminder'`,
+    );
+    assert.deepEqual(
+      {
+        id: migratedReminder.rows[0]?.id,
+        enabled: Number(migratedReminder.rows[0]?.is_enabled),
+        time: migratedReminder.rows[0]?.reminder_time,
+        timezone: migratedReminder.rows[0]?.timezone,
+        nextAt: migratedReminder.rows[0]?.next_reminder_at,
+      },
+      {
+        id: "legacy-reminder",
+        enabled: 1,
+        time: "20:00",
+        timezone: "America/New_York",
+        nextAt: null,
+      },
+    );
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+      values ('second-reminder', 'legacy-user', 0, '08:00', 'America/New_York', 3, 3)
+    `);
+    assert.equal(
+      Number(
+        (
+          await client.execute(
+            "select count(*) as count from reminder_setting where user_id = 'legacy-user'",
+          )
+        ).rows[0]?.count,
+      ),
+      2,
+    );
+    assert.equal(
+      (await client.execute("pragma foreign_key_check")).rows.length,
+      0,
+    );
   } finally {
     client.close();
     await rm(root, { recursive: true, force: true });

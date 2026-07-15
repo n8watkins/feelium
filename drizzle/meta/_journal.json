@@ -57,6 +57,13 @@
       "when": 1784091400325,
       "tag": "0007_wakeful_maelstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784092495974,
+      "tag": "0008_equal_barracuda",
+      "breakpoints": true
     }
   ]
 }

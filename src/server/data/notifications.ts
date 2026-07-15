@@ -4,7 +4,6 @@ import { and, asc, eq, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
-import { nextReminderAt } from "@/lib/reminders";
 import {
   disableInvalidReminderSchedule,
   reminderScheduleCondition,
@@ -20,11 +19,18 @@ import {
   releaseReminderDeliveryLease,
   renewReminderDeliveryLease,
 } from "./reminder-delivery-operations";
+import {
+  createReminderForUser,
+  deleteReminderForUser,
+  listRemindersForUser,
+  updateReminderForUser,
+  updateReminderTimezoneForUser,
+  type ReminderScheduleInput,
+} from "./reminder-schedule-operations";
 import { requireUserId } from "./session";
 
 /**
- * Data access for notifications (PRD 17): the single optional daily reminder
- * (reminder_setting) and Web Push subscriptions (push_subscription).
+ * Data access for daily reminder schedules and Web Push subscriptions.
  *
  * Two groups of functions:
  *   - User-scoped: call requireUserId() and only touch the session user's own rows.
@@ -39,6 +45,8 @@ export type ReminderSettings = {
   reminderTime: string | null;
   timezone: string;
 };
+
+export type ReminderSchedule = ReminderScheduleInput & { id: string };
 
 /** The JSON shape a browser PushSubscription serializes to. */
 export type WebPushSubscriptionJSON = {
@@ -58,11 +66,7 @@ const DEFAULT_REMINDER: ReminderSettings = {
 /** The current user's reminder settings, or sensible defaults if they have none yet. */
 export async function getReminderSettings(): Promise<ReminderSettings> {
   const userId = await requireUserId();
-  const [row] = await db
-    .select()
-    .from(reminderSettings)
-    .where(eq(reminderSettings.userId, userId))
-    .limit(1);
+  const [row] = await listRemindersForUser(db, userId);
   if (!row) return DEFAULT_REMINDER;
   return {
     isEnabled: row.isEnabled,
@@ -71,51 +75,74 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
   };
 }
 
-/** Creates or updates the current user's single daily reminder. */
-export async function upsertReminderSettings(input: ReminderSettings): Promise<void> {
+export async function listReminderSettings(): Promise<ReminderSchedule[]> {
   const userId = await requireUserId();
-  const nextAt =
-    input.isEnabled && input.reminderTime
-      ? nextReminderAt(input.reminderTime, input.timezone)
-      : null;
-  await db
-    .insert(reminderSettings)
-    .values({
-      userId,
-      isEnabled: input.isEnabled,
-      reminderTime: input.reminderTime,
-      timezone: input.timezone,
-      nextReminderAt: nextAt,
-    })
-    .onConflictDoUpdate({
-      target: reminderSettings.userId,
-      set: {
-        isEnabled: input.isEnabled,
-        reminderTime: input.reminderTime,
-        timezone: input.timezone,
-        nextReminderAt: nextAt,
-        deliveryLocalDate: null,
-        deliveryLeaseToken: null,
-        deliveryLeaseExpiresAt: null,
-        updatedAt: new Date(),
-      },
-    });
+  const rows = await listRemindersForUser(db, userId);
+  return rows.flatMap((row) =>
+    row.reminderTime
+      ? [
+          {
+            id: row.id,
+            isEnabled: row.isEnabled,
+            reminderTime: row.reminderTime,
+            timezone: row.timezone,
+          },
+        ]
+      : [],
+  );
+}
+
+export async function createReminderSettings(
+  input: ReminderScheduleInput,
+): Promise<ReminderSchedule> {
+  const userId = await requireUserId();
+  const row = await createReminderForUser(db, userId, input);
+  return {
+    id: row.id,
+    isEnabled: row.isEnabled,
+    reminderTime: row.reminderTime ?? input.reminderTime,
+    timezone: row.timezone,
+  };
+}
+
+export async function updateReminderSettings(
+  reminderId: string,
+  input: ReminderScheduleInput,
+): Promise<boolean> {
+  const userId = await requireUserId();
+  return updateReminderForUser(db, userId, reminderId, input);
+}
+
+export async function deleteReminderSettings(
+  reminderId: string,
+): Promise<boolean> {
+  const userId = await requireUserId();
+  return deleteReminderForUser(db, userId, reminderId);
+}
+
+/** Creates or updates the current user's single daily reminder. */
+export async function upsertReminderSettings(
+  input: ReminderSettings,
+): Promise<void> {
+  const userId = await requireUserId();
+  if (!input.reminderTime) throw new Error("INVALID_REMINDER_TIME");
+  const schedule: ReminderScheduleInput = {
+    isEnabled: input.isEnabled,
+    reminderTime: input.reminderTime,
+    timezone: input.timezone,
+  };
+  const [existing] = await listRemindersForUser(db, userId);
+  if (existing) {
+    await updateReminderForUser(db, userId, existing.id, schedule);
+  } else {
+    await createReminderForUser(db, userId, schedule);
+  }
 }
 
 /** Keeps an enabled reminder aligned with the browser's current IANA timezone. */
 export async function updateReminderTimezone(timezone: string): Promise<void> {
   const userId = await requireUserId();
-  await db
-    .update(reminderSettings)
-    .set({
-      timezone,
-      nextReminderAt: null,
-      deliveryLocalDate: null,
-      deliveryLeaseToken: null,
-      deliveryLeaseExpiresAt: null,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(reminderSettings.userId, userId), eq(reminderSettings.isEnabled, true)));
+  await updateReminderTimezoneForUser(db, userId, timezone);
 }
 
 /** Stores (or refreshes) a Web Push subscription for the current user + device. */
@@ -146,17 +173,27 @@ export async function savePushSubscription(
 }
 
 /** Removes one of the current user's push subscriptions by endpoint. */
-export async function deleteMyPushSubscription(endpoint: string): Promise<void> {
+export async function deleteMyPushSubscription(
+  endpoint: string,
+): Promise<void> {
   const userId = await requireUserId();
   await db
     .delete(pushSubscriptions)
-    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+    .where(
+      and(
+        eq(pushSubscriptions.userId, userId),
+        eq(pushSubscriptions.endpoint, endpoint),
+      ),
+    );
 }
 
 /** All push subscriptions belonging to the current user (e.g. for a test send). */
 export async function listMyPushSubscriptions() {
   const userId = await requireUserId();
-  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  return db
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, userId));
 }
 
 // ---- System-scoped (reminder-send job only) ------------------------------------------
@@ -170,11 +207,13 @@ export async function listReminderCandidates(
 ): Promise<ReminderCandidate[]> {
   const rows = await db
     .select({
+      id: reminderSettings.id,
       userId: reminderSettings.userId,
       reminderTime: reminderSettings.reminderTime,
       timezone: reminderSettings.timezone,
       nextReminderAt: reminderSettings.nextReminderAt,
       deliveryLocalDate: reminderSettings.deliveryLocalDate,
+      deliveryOccurrenceAt: reminderSettings.deliveryOccurrenceAt,
     })
     .from(reminderSettings)
     .where(
@@ -193,11 +232,13 @@ export async function listReminderCandidates(
     r.reminderTime
       ? [
           {
+            id: r.id,
             userId: r.userId,
             reminderTime: r.reminderTime,
             timezone: r.timezone,
             nextReminderAt: r.nextReminderAt,
             deliveryLocalDate: r.deliveryLocalDate,
+            deliveryOccurrenceAt: r.deliveryOccurrenceAt,
           },
         ]
       : [],
@@ -228,62 +269,113 @@ export async function disableInvalidReminder(
 export async function claimReminderDelivery(
   reminder: ReminderCandidate,
   localDate: string,
+  occurrenceAt: Date,
   now: Date,
   leaseDurationMs: number,
 ): Promise<string | null> {
-  return claimReminderDeliveryLease(db, reminder, localDate, now, leaseDurationMs);
+  return claimReminderDeliveryLease(
+    db,
+    reminder,
+    localDate,
+    occurrenceAt,
+    now,
+    leaseDurationMs,
+  );
 }
 
 export async function releaseReminderDelivery(
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   retryAt: Date,
 ): Promise<boolean> {
-  return releaseReminderDeliveryLease(db, userId, localDate, token, now, retryAt);
+  return releaseReminderDeliveryLease(
+    db,
+    reminderId,
+    userId,
+    localDate,
+    occurrenceAt,
+    token,
+    now,
+    retryAt,
+  );
 }
 
 export async function renewReminderDelivery(
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   leaseDurationMs: number,
 ): Promise<boolean> {
-  return renewReminderDeliveryLease(db, userId, localDate, token, now, leaseDurationMs);
+  return renewReminderDeliveryLease(
+    db,
+    reminderId,
+    userId,
+    localDate,
+    occurrenceAt,
+    token,
+    now,
+    leaseDurationMs,
+  );
 }
 
 /** Marks the claimed local date complete and advances its persisted UTC schedule. */
 export async function completeReminderDelivery(
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   nextAt: Date,
 ): Promise<boolean> {
-  return completeReminderDeliveryLease(db, userId, localDate, token, now, nextAt);
+  return completeReminderDeliveryLease(
+    db,
+    reminderId,
+    userId,
+    localDate,
+    occurrenceAt,
+    token,
+    now,
+    nextAt,
+  );
 }
 
 export async function listPushSubscriptionsForReminder(
+  reminderId: string,
   userId: string,
-  localDate: string,
+  occurrenceAt: Date,
   limit: number,
 ) {
-  return listPendingReminderSubscriptions(db, userId, localDate, limit);
+  return listPendingReminderSubscriptions(
+    db,
+    reminderId,
+    userId,
+    occurrenceAt,
+    limit,
+  );
 }
 
 export async function hasPendingPushSubscriptionsForReminder(
+  reminderId: string,
   userId: string,
-  localDate: string,
+  occurrenceAt: Date,
 ): Promise<boolean> {
-  return hasPendingReminderSubscriptions(db, userId, localDate);
+  return hasPendingReminderSubscriptions(db, reminderId, userId, occurrenceAt);
 }
 
 export async function markPushSubscriptionAttempt(
   subscriptionId: string,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   delivered: boolean,
   attemptedAt: Date,
@@ -292,8 +384,10 @@ export async function markPushSubscriptionAttempt(
   return recordReminderSubscriptionAttempt(
     db,
     subscriptionId,
+    reminderId,
     userId,
     localDate,
+    occurrenceAt,
     token,
     delivered,
     attemptedAt,
@@ -303,10 +397,21 @@ export async function markPushSubscriptionAttempt(
 
 export async function deletePushSubscriptionForReminder(
   subscriptionId: string,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   deletedAt: Date,
 ): Promise<boolean> {
-  return deleteReminderSubscription(db, subscriptionId, userId, localDate, token, deletedAt);
+  return deleteReminderSubscription(
+    db,
+    subscriptionId,
+    reminderId,
+    userId,
+    localDate,
+    occurrenceAt,
+    token,
+    deletedAt,
+  );
 }

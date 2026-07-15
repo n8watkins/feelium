@@ -62,7 +62,7 @@ export type UserDataExport = {
   checkInValues: (typeof checkInValues.$inferSelect)[];
   tags: (typeof tags.$inferSelect)[];
   checkInTags: { checkInId: string; tagId: string; tagName: string }[];
-  reminderSettings: typeof reminderSettings.$inferSelect | null;
+  reminderSettings: (typeof reminderSettings.$inferSelect)[];
   pushSubscriptions: (typeof pushSubscriptions.$inferSelect)[];
 };
 
@@ -95,12 +95,19 @@ export async function exportUserDataForUser(
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
-    database.select().from(profiles).where(eq(profiles.userId, userId)).limit(1),
+    database
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, userId))
+      .limit(1),
     database
       .select()
       .from(behaviorCategories)
       .where(eq(behaviorCategories.userId, userId))
-      .orderBy(asc(behaviorCategories.sortOrder), asc(behaviorCategories.createdAt)),
+      .orderBy(
+        asc(behaviorCategories.sortOrder),
+        asc(behaviorCategories.createdAt),
+      ),
     database
       .select()
       .from(behaviors)
@@ -121,7 +128,10 @@ export async function exportUserDataForUser(
       .from(checkIns)
       .where(eq(checkIns.userId, userId))
       .orderBy(asc(checkIns.occurredAt)),
-    database.select().from(checkInValues).where(eq(checkInValues.userId, userId)),
+    database
+      .select()
+      .from(checkInValues)
+      .where(eq(checkInValues.userId, userId)),
     database
       .select()
       .from(tags)
@@ -141,7 +151,10 @@ export async function exportUserDataForUser(
       .select()
       .from(reminderSettings)
       .where(eq(reminderSettings.userId, userId))
-      .limit(1),
+      .orderBy(
+        asc(reminderSettings.reminderTime),
+        asc(reminderSettings.createdAt),
+      ),
     database
       .select()
       .from(pushSubscriptions)
@@ -152,7 +165,7 @@ export async function exportUserDataForUser(
   return {
     exportedAt: nowIso,
     app: "feelium",
-    formatVersion: 2,
+    formatVersion: 3,
     account: user[0] ?? { id: userId, email: null, name: null },
     profile: profile[0]
       ? {
@@ -171,7 +184,7 @@ export async function exportUserDataForUser(
     checkInValues: values,
     tags: userTags,
     checkInTags: tagLinks,
-    reminderSettings: reminder[0] ?? null,
+    reminderSettings: reminder,
     pushSubscriptions: subscriptions,
   };
 }
@@ -188,24 +201,34 @@ function trackingDeletes(
   userId: string,
 ): [Statement, ...Statement[]] {
   return [
-    database.delete(checkInTags).where(
-      inArray(
-        checkInTags.checkInId,
-        database
-          .select({ id: checkIns.id })
-          .from(checkIns)
-          .where(eq(checkIns.userId, userId)),
+    database
+      .delete(checkInTags)
+      .where(
+        inArray(
+          checkInTags.checkInId,
+          database
+            .select({ id: checkIns.id })
+            .from(checkIns)
+            .where(eq(checkIns.userId, userId)),
+        ),
       ),
-    ),
     database.delete(checkInValues).where(eq(checkInValues.userId, userId)),
     database.delete(checkIns).where(eq(checkIns.userId, userId)),
-    database.delete(dailyBehaviorEntries).where(eq(dailyBehaviorEntries.userId, userId)),
+    database
+      .delete(dailyBehaviorEntries)
+      .where(eq(dailyBehaviorEntries.userId, userId)),
     database.delete(behaviors).where(eq(behaviors.userId, userId)),
-    database.delete(behaviorCategories).where(eq(behaviorCategories.userId, userId)),
+    database
+      .delete(behaviorCategories)
+      .where(eq(behaviorCategories.userId, userId)),
     database.delete(outcomeMetrics).where(eq(outcomeMetrics.userId, userId)),
     database.delete(tags).where(eq(tags.userId, userId)),
-    database.delete(reminderSettings).where(eq(reminderSettings.userId, userId)),
-    database.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)),
+    database
+      .delete(reminderSettings)
+      .where(eq(reminderSettings.userId, userId)),
+    database
+      .delete(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId)),
   ];
 }
 

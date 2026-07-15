@@ -22,6 +22,13 @@ import {
   releaseReminderDeliveryLease,
   renewReminderDeliveryLease,
 } from "@/server/data/reminder-delivery-operations";
+import {
+  createReminderForUser,
+  deleteReminderForUser,
+  listRemindersForUser,
+  updateReminderForUser,
+  updateReminderTimezoneForUser,
+} from "@/server/data/reminder-schedule-operations";
 
 async function createTestDatabase() {
   const client = createClient({ url: ":memory:" });
@@ -41,17 +48,19 @@ async function createTestDatabase() {
     );
     create table reminder_setting (
       id text primary key,
-      user_id text not null unique references user(id) on delete cascade,
+      user_id text not null references user(id) on delete cascade,
       is_enabled integer not null default 0,
       reminder_time text,
       timezone text not null default 'UTC',
       last_sent_local_date text,
       delivery_local_date text,
+      delivery_occurrence_at integer,
       delivery_lease_token text,
       delivery_lease_expires_at integer,
       next_reminder_at integer,
       created_at integer not null,
-      updated_at integer not null
+      updated_at integer not null,
+      unique(user_id, reminder_time)
     );
     create table push_subscription (
       id text primary key,
@@ -66,6 +75,19 @@ async function createTestDatabase() {
       reminder_failure_count integer not null default 0,
       reminder_quarantined_at integer,
       unique(user_id, endpoint)
+    );
+    create table reminder_delivery_attempt (
+      id text primary key,
+      reminder_id text not null references reminder_setting(id) on delete cascade,
+      subscription_id text not null references push_subscription(id) on delete cascade,
+      occurrence_at integer not null,
+      local_date text not null,
+      attempt_count integer not null default 0,
+      last_attempt_at integer,
+      delivered_at integer,
+      created_at integer not null,
+      updated_at integer not null,
+      unique(reminder_id, subscription_id, occurrence_at)
     );
   `);
   return { client, database: drizzle({ client, schema }) };
@@ -86,13 +108,16 @@ async function claimTestReminder(
   const token = await claimReminderDeliveryLease(
     database,
     {
+      id: `reminder-${userId}`,
       userId,
       reminderTime: "09:00",
       timezone: "UTC",
       nextReminderAt: new Date(1000),
       deliveryLocalDate: null,
+      deliveryOccurrenceAt: null,
     },
     "2026-07-14",
+    new Date(1000),
     new Date(1000),
     10_000,
   );
@@ -103,7 +128,9 @@ async function claimTestReminder(
 test("new profiles expose explicit timezone sync state on the first request", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('new-user', 'new@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('new-user', 'new@example.test')",
+    );
 
     const profile = await ensureProfileForUser(database, "new-user");
 
@@ -128,7 +155,9 @@ test("new profiles expose explicit timezone sync state on the first request", as
 test("background timezone sync cannot overwrite a manual preference", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('race-user', 'race@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('race-user', 'race@example.test')",
+    );
     await ensureProfileForUser(database, "race-user");
     await client.execute(`
       update profile
@@ -136,7 +165,11 @@ test("background timezone sync cannot overwrite a manual preference", async () =
       where user_id = 'race-user'
     `);
 
-    const updated = await syncProfileTimeZone(database, "race-user", "America/New_York");
+    const updated = await syncProfileTimeZone(
+      database,
+      "race-user",
+      "America/New_York",
+    );
     const result = await client.execute(
       "select timezone, auto_sync_timezone from profile where user_id = 'race-user'",
     );
@@ -152,8 +185,12 @@ test("background timezone sync cannot overwrite a manual preference", async () =
 test("manual preferences persist only for the selected profile", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('owner', 'owner@example.test')");
-    await client.execute("insert into user (id, email) values ('other', 'other@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('owner', 'owner@example.test')",
+    );
+    await client.execute(
+      "insert into user (id, email) values ('other', 'other@example.test')",
+    );
     await ensureProfileForUser(database, "owner");
     await ensureProfileForUser(database, "other");
 
@@ -198,14 +235,20 @@ test("manual preferences persist only for the selected profile", async () => {
 test("an explicit device-timezone correction updates a legacy profile", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('legacy', 'legacy@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('legacy', 'legacy@example.test')",
+    );
     await ensureProfileForUser(database, "legacy");
     await client.execute(
       "update profile set timezone = 'UTC', auto_sync_timezone = 0 where user_id = 'legacy'",
     );
 
     assert.equal(
-      await setProfileTimeZoneForUser(database, "legacy", "America/Los_Angeles"),
+      await setProfileTimeZoneForUser(
+        database,
+        "legacy",
+        "America/Los_Angeles",
+      ),
       true,
     );
     const result = await client.execute(
@@ -221,7 +264,9 @@ test("an explicit device-timezone correction updates a legacy profile", async ()
 test("timezone initialization completes when the detected timezone is unchanged", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('utc-user', 'utc@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('utc-user', 'utc@example.test')",
+    );
     await ensureProfileForUser(database, "utc-user");
 
     assert.equal(await syncProfileTimeZone(database, "utc-user", "UTC"), true);
@@ -238,7 +283,9 @@ test("timezone initialization completes when the detected timezone is unchanged"
 test("expired reminder leases are reclaimable and stale owners cannot complete", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('lease-user', 'lease@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('lease-user', 'lease@example.test')",
+    );
     await client.execute(`
       insert into reminder_setting (
         id, user_id, is_enabled, reminder_time, timezone, next_reminder_at,
@@ -248,16 +295,19 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
       )
     `);
     const reminder = {
+      id: "lease-reminder",
       userId: "lease-user",
       reminderTime: "09:00",
       timezone: "UTC",
       nextReminderAt: new Date(1000),
       deliveryLocalDate: null,
+      deliveryOccurrenceAt: null,
     };
     const firstToken = await claimReminderDeliveryLease(
       database,
       reminder,
       "2026-07-14",
+      new Date(1000),
       new Date(1000),
       1000,
     );
@@ -265,8 +315,13 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
     assert.equal(
       await claimReminderDeliveryLease(
         database,
-        { ...reminder, nextReminderAt: new Date(2000), deliveryLocalDate: "2026-07-14" },
+        {
+          ...reminder,
+          nextReminderAt: new Date(2000),
+          deliveryLocalDate: "2026-07-14",
+        },
         "2026-07-14",
+        new Date(1000),
         new Date(1500),
         1000,
       ),
@@ -275,8 +330,13 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
 
     const secondToken = await claimReminderDeliveryLease(
       database,
-      { ...reminder, nextReminderAt: new Date(2000), deliveryLocalDate: "2026-07-14" },
+      {
+        ...reminder,
+        nextReminderAt: new Date(2000),
+        deliveryLocalDate: "2026-07-14",
+      },
       "2026-07-14",
+      new Date(1000),
       new Date(2000),
       1000,
     );
@@ -285,8 +345,10 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
     assert.equal(
       await completeReminderDeliveryLease(
         database,
+        "lease-reminder",
         "lease-user",
         "2026-07-14",
+        new Date(1000),
         firstToken,
         new Date(2000),
         new Date(10_000),
@@ -296,8 +358,10 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
     assert.equal(
       await releaseReminderDeliveryLease(
         database,
+        "lease-reminder",
         "lease-user",
         "2026-07-14",
+        new Date(1000),
         secondToken,
         new Date(2500),
         new Date(4000),
@@ -312,7 +376,9 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
 test("reclaimed reminder leases fence stale dispatch progress and finalization", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('fenced-user', 'fenced@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('fenced-user', 'fenced@example.test')",
+    );
     await client.execute(`
       insert into reminder_setting (
         id, user_id, is_enabled, reminder_time, timezone, next_reminder_at,
@@ -330,16 +396,19 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
       });
     }
     const reminder = {
+      id: "fenced-reminder",
       userId: "fenced-user",
       reminderTime: "09:00",
       timezone: "UTC",
       nextReminderAt: new Date(1000),
       deliveryLocalDate: null,
+      deliveryOccurrenceAt: null,
     };
     const staleToken = await claimReminderDeliveryLease(
       database,
       reminder,
       "2026-07-14",
+      new Date(1000),
       new Date(1000),
       2000,
     );
@@ -347,8 +416,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
     assert.equal(
       await renewReminderDeliveryLease(
         database,
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         new Date(2000),
         2000,
@@ -358,8 +429,13 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
     assert.equal(
       await claimReminderDeliveryLease(
         database,
-        { ...reminder, nextReminderAt: new Date(4000), deliveryLocalDate: "2026-07-14" },
+        {
+          ...reminder,
+          nextReminderAt: new Date(4000),
+          deliveryLocalDate: "2026-07-14",
+        },
         "2026-07-14",
+        new Date(1000),
         new Date(3000),
         2000,
       ),
@@ -368,8 +444,13 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
 
     const activeToken = await claimReminderDeliveryLease(
       database,
-      { ...reminder, nextReminderAt: new Date(4000), deliveryLocalDate: "2026-07-14" },
+      {
+        ...reminder,
+        nextReminderAt: new Date(4000),
+        deliveryLocalDate: "2026-07-14",
+      },
       "2026-07-14",
+      new Date(1000),
       new Date(4000),
       2000,
     );
@@ -378,8 +459,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
     assert.equal(
       await renewReminderDeliveryLease(
         database,
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         new Date(5000),
         2000,
@@ -390,8 +473,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
       await recordReminderSubscriptionAttempt(
         database,
         "progress",
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         true,
         new Date(5000),
@@ -403,8 +488,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
       await recordReminderSubscriptionAttempt(
         database,
         "retry",
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         false,
         new Date(5000),
@@ -416,8 +503,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
       await deleteReminderSubscription(
         database,
         "gone",
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         new Date(5000),
       ),
@@ -426,8 +515,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
     assert.equal(
       await releaseReminderDeliveryLease(
         database,
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         new Date(5000),
         new Date(7000),
@@ -437,8 +528,10 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
     assert.equal(
       await completeReminderDeliveryLease(
         database,
+        "fenced-reminder",
         "fenced-user",
         "2026-07-14",
+        new Date(1000),
         staleToken,
         new Date(5000),
         new Date(10_000),
@@ -475,7 +568,9 @@ test("reclaimed reminder leases fence stale dispatch progress and finalization",
 test("partial reminder delivery retries failed devices after successes and pruning", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('push-user', 'push@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('push-user', 'push@example.test')",
+    );
     const token = await claimTestReminder(client, database, "push-user");
     for (const id of ["delivered", "expired", "transient"]) {
       await client.execute({
@@ -489,8 +584,10 @@ test("partial reminder delivery retries failed devices after successes and pruni
     await recordReminderSubscriptionAttempt(
       database,
       "delivered",
+      "reminder-push-user",
       "push-user",
       "2026-07-14",
+      new Date(1000),
       token,
       true,
       new Date(1000),
@@ -499,16 +596,20 @@ test("partial reminder delivery retries failed devices after successes and pruni
     await deleteReminderSubscription(
       database,
       "expired",
+      "reminder-push-user",
       "push-user",
       "2026-07-14",
+      new Date(1000),
       token,
       new Date(1000),
     );
     await recordReminderSubscriptionAttempt(
       database,
       "transient",
+      "reminder-push-user",
       "push-user",
       "2026-07-14",
+      new Date(1000),
       token,
       false,
       new Date(1000),
@@ -516,27 +617,45 @@ test("partial reminder delivery retries failed devices after successes and pruni
     );
 
     assert.equal(
-      await hasPendingReminderSubscriptions(database, "push-user", "2026-07-14"),
+      await hasPendingReminderSubscriptions(
+        database,
+        "reminder-push-user",
+        "push-user",
+        new Date(1000),
+      ),
       true,
     );
     assert.deepEqual(
-      (await listPendingReminderSubscriptions(database, "push-user", "2026-07-14", 25)).map(
-        (row) => row.id,
-      ),
+      (
+        await listPendingReminderSubscriptions(
+          database,
+          "reminder-push-user",
+          "push-user",
+          new Date(1000),
+          25,
+        )
+      ).map((row) => row.id),
       ["transient"],
     );
     await recordReminderSubscriptionAttempt(
       database,
       "transient",
+      "reminder-push-user",
       "push-user",
       "2026-07-14",
+      new Date(1000),
       token,
       true,
       new Date(2000),
       3,
     );
     assert.equal(
-      await hasPendingReminderSubscriptions(database, "push-user", "2026-07-14"),
+      await hasPendingReminderSubscriptions(
+        database,
+        "reminder-push-user",
+        "push-user",
+        new Date(1000),
+      ),
       false,
     );
     const recovered = await client.execute(
@@ -552,21 +671,27 @@ test("partial reminder delivery retries failed devices after successes and pruni
 test("bounded reminder pages resume with subscriptions not yet attempted", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('many-user', 'many@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('many-user', 'many@example.test')",
+    );
     const token = await claimTestReminder(client, database, "many-user");
     for (let index = 0; index < 30; index += 1) {
       await client.execute({
         sql: `insert into push_subscription
           (id, user_id, endpoint, subscription_data, created_at)
           values (?, 'many-user', ?, '{}', 1)`,
-        args: [`subscription-${String(index).padStart(2, "0")}`, `https://push.example/${index}`],
+        args: [
+          `subscription-${String(index).padStart(2, "0")}`,
+          `https://push.example/${index}`,
+        ],
       });
     }
 
     const firstPage = await listPendingReminderSubscriptions(
       database,
+      "reminder-many-user",
       "many-user",
-      "2026-07-14",
+      new Date(1000),
       25,
     );
     assert.equal(firstPage.length, 25);
@@ -574,8 +699,10 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
       await recordReminderSubscriptionAttempt(
         database,
         subscription.id,
+        "reminder-many-user",
         "many-user",
         "2026-07-14",
+        new Date(1000),
         token,
         false,
         new Date(1000),
@@ -584,8 +711,9 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
     }
     const secondPage = await listPendingReminderSubscriptions(
       database,
+      "reminder-many-user",
       "many-user",
-      "2026-07-14",
+      new Date(1000),
       25,
     );
     assert.deepEqual(
@@ -606,7 +734,9 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
 test("permanently failing reminder subscriptions are quarantined after three attempts", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('failed-user', 'failed@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('failed-user', 'failed@example.test')",
+    );
     const token = await claimTestReminder(client, database, "failed-user");
     await client.execute(`
       insert into push_subscription
@@ -619,15 +749,22 @@ test("permanently failing reminder subscriptions are quarantined after three att
       await recordReminderSubscriptionAttempt(
         database,
         "failed-subscription",
+        "reminder-failed-user",
         "failed-user",
         "2026-07-14",
+        new Date(1000),
         token,
         false,
         new Date(attempt * 1000),
         3,
       );
       assert.equal(
-        await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-14"),
+        await hasPendingReminderSubscriptions(
+          database,
+          "reminder-failed-user",
+          "failed-user",
+          new Date(1000),
+        ),
         true,
       );
     }
@@ -635,19 +772,31 @@ test("permanently failing reminder subscriptions are quarantined after three att
     await recordReminderSubscriptionAttempt(
       database,
       "failed-subscription",
+      "reminder-failed-user",
       "failed-user",
       "2026-07-14",
+      new Date(1000),
       token,
       false,
       new Date(3000),
       3,
     );
     assert.equal(
-      await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-14"),
+      await hasPendingReminderSubscriptions(
+        database,
+        "reminder-failed-user",
+        "failed-user",
+        new Date(1000),
+      ),
       false,
     );
     assert.equal(
-      await hasPendingReminderSubscriptions(database, "failed-user", "2026-07-15"),
+      await hasPendingReminderSubscriptions(
+        database,
+        "reminder-failed-user",
+        "failed-user",
+        new Date(86_401_000),
+      ),
       false,
     );
     const result = await client.execute(
@@ -663,7 +812,9 @@ test("permanently failing reminder subscriptions are quarantined after three att
 test("invalid legacy reminders leave the queue without affecting corrected schedules", async () => {
   const { client, database } = await createTestDatabase();
   try {
-    await client.execute("insert into user (id, email) values ('invalid-user', 'invalid@example.test')");
+    await client.execute(
+      "insert into user (id, email) values ('invalid-user', 'invalid@example.test')",
+    );
     await client.execute(`
       insert into reminder_setting (
         id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at
@@ -672,11 +823,13 @@ test("invalid legacy reminders leave the queue without affecting corrected sched
       )
     `);
     const invalidCandidate = {
+      id: "invalid-reminder",
       userId: "invalid-user",
       reminderTime: "09:00",
       timezone: "Invalid/Timezone",
       nextReminderAt: null,
       deliveryLocalDate: null,
+      deliveryOccurrenceAt: null,
     };
 
     assert.equal(
@@ -702,6 +855,192 @@ test("invalid legacy reminders leave the queue without affecting corrected sched
     );
     assert.equal(Number(result.rows[0]?.is_enabled), 1);
     assert.equal(result.rows[0]?.timezone, "UTC");
+  } finally {
+    client.close();
+  }
+});
+
+test("reminder schedules are user scoped and reject duplicate local times", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('owner', 'owner@example.test')",
+    );
+    await client.execute(
+      "insert into user (id, email) values ('other', 'other@example.test')",
+    );
+    const morning = await createReminderForUser(database, "owner", {
+      isEnabled: true,
+      reminderTime: "08:00",
+      timezone: "America/Los_Angeles",
+    });
+    const evening = await createReminderForUser(database, "owner", {
+      isEnabled: false,
+      reminderTime: "20:00",
+      timezone: "America/Los_Angeles",
+    });
+
+    await assert.rejects(() =>
+      createReminderForUser(database, "owner", {
+        isEnabled: true,
+        reminderTime: "08:00",
+        timezone: "UTC",
+      }),
+    );
+    assert.equal(
+      await updateReminderForUser(database, "other", morning.id, {
+        isEnabled: false,
+        reminderTime: "09:00",
+        timezone: "UTC",
+      }),
+      false,
+    );
+    assert.equal(
+      await deleteReminderForUser(database, "other", evening.id),
+      false,
+    );
+    assert.deepEqual(
+      (await listRemindersForUser(database, "owner")).map(
+        (row) => row.reminderTime,
+      ),
+      ["08:00", "20:00"],
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("two reminder occurrences on one local day deliver independently", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('multi', 'multi@example.test')",
+    );
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, next_reminder_at, created_at, updated_at)
+      values
+        ('morning', 'multi', 1, '08:00', 'UTC', 1, 1, 1),
+        ('evening', 'multi', 1, '20:00', 'UTC', 2, 1, 1)
+    `);
+    await client.execute(`
+      insert into push_subscription
+        (id, user_id, endpoint, subscription_data, created_at)
+      values ('device', 'multi', 'https://push.example/device', '{}', 1)
+    `);
+    const morningOccurrence = new Date(1000);
+    const eveningOccurrence = new Date(2000);
+    const morningToken = await claimReminderDeliveryLease(
+      database,
+      {
+        id: "morning",
+        userId: "multi",
+        reminderTime: "08:00",
+        timezone: "UTC",
+        nextReminderAt: morningOccurrence,
+        deliveryLocalDate: null,
+        deliveryOccurrenceAt: null,
+      },
+      "2026-07-14",
+      morningOccurrence,
+      morningOccurrence,
+      10_000,
+    );
+    const eveningToken = await claimReminderDeliveryLease(
+      database,
+      {
+        id: "evening",
+        userId: "multi",
+        reminderTime: "20:00",
+        timezone: "UTC",
+        nextReminderAt: eveningOccurrence,
+        deliveryLocalDate: null,
+        deliveryOccurrenceAt: null,
+      },
+      "2026-07-14",
+      eveningOccurrence,
+      eveningOccurrence,
+      10_000,
+    );
+    assert.ok(morningToken);
+    assert.ok(eveningToken);
+
+    assert.equal(
+      await recordReminderSubscriptionAttempt(
+        database,
+        "device",
+        "morning",
+        "multi",
+        "2026-07-14",
+        morningOccurrence,
+        morningToken,
+        true,
+        morningOccurrence,
+        3,
+      ),
+      true,
+    );
+    assert.equal(
+      await hasPendingReminderSubscriptions(
+        database,
+        "morning",
+        "multi",
+        morningOccurrence,
+      ),
+      false,
+    );
+    assert.deepEqual(
+      (
+        await listPendingReminderSubscriptions(
+          database,
+          "evening",
+          "multi",
+          eveningOccurrence,
+          25,
+        )
+      ).map((row) => row.id),
+      ["device"],
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("timezone changes reschedule every enabled reminder", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute(
+      "insert into user (id, email) values ('zones', 'zones@example.test')",
+    );
+    await client.execute(`
+      insert into reminder_setting
+        (id, user_id, is_enabled, reminder_time, timezone, created_at, updated_at)
+      values
+        ('enabled-one', 'zones', 1, '08:00', 'UTC', 1, 1),
+        ('enabled-two', 'zones', 1, '20:00', 'UTC', 1, 1),
+        ('disabled', 'zones', 0, '12:00', 'UTC', 1, 1)
+    `);
+
+    assert.equal(
+      await updateReminderTimezoneForUser(
+        database,
+        "zones",
+        "America/Los_Angeles",
+      ),
+      2,
+    );
+    const result = await client.execute(
+      "select id, timezone, next_reminder_at from reminder_setting order by id",
+    );
+    assert.equal(
+      result.rows.find((row) => row.id === "disabled")?.timezone,
+      "UTC",
+    );
+    for (const id of ["enabled-one", "enabled-two"]) {
+      const row = result.rows.find((candidate) => candidate.id === id);
+      assert.equal(row?.timezone, "America/Los_Angeles");
+      assert.notEqual(row?.next_reminder_at, null);
+    }
   } finally {
     client.close();
   }

@@ -1,6 +1,22 @@
-import { and, asc, eq, exists, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  getTableColumns,
+  gt,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
-import { pushSubscriptions, reminderSettings } from "@/db/schema";
+import {
+  pushSubscriptions,
+  reminderDeliveryAttempts,
+  reminderSettings,
+} from "@/db/schema";
 import {
   reminderScheduleCondition,
   type ReminderCandidate,
@@ -10,8 +26,10 @@ type AppDatabase = (typeof import("@/db"))["db"];
 
 function activeReminderDeliveryLease(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
 ) {
@@ -21,8 +39,10 @@ function activeReminderDeliveryLease(
       .from(reminderSettings)
       .where(
         and(
+          eq(reminderSettings.id, reminderId),
           eq(reminderSettings.userId, userId),
           eq(reminderSettings.deliveryLocalDate, localDate),
+          eq(reminderSettings.deliveryOccurrenceAt, occurrenceAt),
           eq(reminderSettings.deliveryLeaseToken, token),
           gt(reminderSettings.deliveryLeaseExpiresAt, now),
         ),
@@ -34,6 +54,7 @@ export async function claimReminderDeliveryLease(
   database: AppDatabase,
   reminder: ReminderCandidate,
   localDate: string,
+  occurrenceAt: Date,
   now: Date,
   leaseDurationMs: number,
 ): Promise<string | null> {
@@ -43,6 +64,7 @@ export async function claimReminderDeliveryLease(
     .update(reminderSettings)
     .set({
       deliveryLocalDate: localDate,
+      deliveryOccurrenceAt: occurrenceAt,
       deliveryLeaseToken: token,
       deliveryLeaseExpiresAt: leaseExpiresAt,
       nextReminderAt: leaseExpiresAt,
@@ -67,8 +89,10 @@ export async function claimReminderDeliveryLease(
 
 export async function renewReminderDeliveryLease(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   leaseDurationMs: number,
@@ -83,8 +107,10 @@ export async function renewReminderDeliveryLease(
     })
     .where(
       and(
+        eq(reminderSettings.id, reminderId),
         eq(reminderSettings.userId, userId),
         eq(reminderSettings.deliveryLocalDate, localDate),
+        eq(reminderSettings.deliveryOccurrenceAt, occurrenceAt),
         eq(reminderSettings.deliveryLeaseToken, token),
         gt(reminderSettings.deliveryLeaseExpiresAt, now),
       ),
@@ -95,8 +121,10 @@ export async function renewReminderDeliveryLease(
 
 export async function releaseReminderDeliveryLease(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   retryAt: Date,
@@ -111,8 +139,10 @@ export async function releaseReminderDeliveryLease(
     })
     .where(
       and(
+        eq(reminderSettings.id, reminderId),
         eq(reminderSettings.userId, userId),
         eq(reminderSettings.deliveryLocalDate, localDate),
+        eq(reminderSettings.deliveryOccurrenceAt, occurrenceAt),
         eq(reminderSettings.deliveryLeaseToken, token),
         gt(reminderSettings.deliveryLeaseExpiresAt, now),
       ),
@@ -123,8 +153,10 @@ export async function releaseReminderDeliveryLease(
 
 export async function completeReminderDeliveryLease(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   now: Date,
   nextAt: Date,
@@ -134,6 +166,7 @@ export async function completeReminderDeliveryLease(
     .set({
       lastSentLocalDate: localDate,
       deliveryLocalDate: null,
+      deliveryOccurrenceAt: null,
       deliveryLeaseToken: null,
       deliveryLeaseExpiresAt: null,
       nextReminderAt: nextAt,
@@ -141,8 +174,10 @@ export async function completeReminderDeliveryLease(
     })
     .where(
       and(
+        eq(reminderSettings.id, reminderId),
         eq(reminderSettings.userId, userId),
         eq(reminderSettings.deliveryLocalDate, localDate),
+        eq(reminderSettings.deliveryOccurrenceAt, occurrenceAt),
         eq(reminderSettings.deliveryLeaseToken, token),
         gt(reminderSettings.deliveryLeaseExpiresAt, now),
       ),
@@ -153,25 +188,31 @@ export async function completeReminderDeliveryLease(
 
 export async function listPendingReminderSubscriptions(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
-  localDate: string,
+  occurrenceAt: Date,
   limit: number,
 ) {
   return database
-    .select()
+    .select(getTableColumns(pushSubscriptions))
     .from(pushSubscriptions)
+    .leftJoin(
+      reminderDeliveryAttempts,
+      and(
+        eq(reminderDeliveryAttempts.subscriptionId, pushSubscriptions.id),
+        eq(reminderDeliveryAttempts.reminderId, reminderId),
+        eq(reminderDeliveryAttempts.occurrenceAt, occurrenceAt),
+      ),
+    )
     .where(
       and(
         eq(pushSubscriptions.userId, userId),
         isNull(pushSubscriptions.reminderQuarantinedAt),
-        or(
-          isNull(pushSubscriptions.lastReminderLocalDate),
-          ne(pushSubscriptions.lastReminderLocalDate, localDate),
-        ),
+        isNull(reminderDeliveryAttempts.deliveredAt),
       ),
     )
     .orderBy(
-      asc(pushSubscriptions.lastReminderAttemptAt),
+      asc(reminderDeliveryAttempts.lastAttemptAt),
       asc(pushSubscriptions.id),
     )
     .limit(limit);
@@ -179,20 +220,26 @@ export async function listPendingReminderSubscriptions(
 
 export async function hasPendingReminderSubscriptions(
   database: AppDatabase,
+  reminderId: string,
   userId: string,
-  localDate: string,
+  occurrenceAt: Date,
 ): Promise<boolean> {
   const rows = await database
     .select({ id: pushSubscriptions.id })
     .from(pushSubscriptions)
+    .leftJoin(
+      reminderDeliveryAttempts,
+      and(
+        eq(reminderDeliveryAttempts.subscriptionId, pushSubscriptions.id),
+        eq(reminderDeliveryAttempts.reminderId, reminderId),
+        eq(reminderDeliveryAttempts.occurrenceAt, occurrenceAt),
+      ),
+    )
     .where(
       and(
         eq(pushSubscriptions.userId, userId),
         isNull(pushSubscriptions.reminderQuarantinedAt),
-        or(
-          isNull(pushSubscriptions.lastReminderLocalDate),
-          ne(pushSubscriptions.lastReminderLocalDate, localDate),
-        ),
+        isNull(reminderDeliveryAttempts.deliveredAt),
       ),
     )
     .limit(1);
@@ -202,15 +249,81 @@ export async function hasPendingReminderSubscriptions(
 export async function recordReminderSubscriptionAttempt(
   database: AppDatabase,
   subscriptionId: string,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   delivered: boolean,
   attemptedAt: Date,
   maxFailures: number,
 ): Promise<boolean> {
+  const occurrenceTimestamp = Math.floor(occurrenceAt.getTime() / 1000);
+  const attemptedTimestamp = Math.floor(attemptedAt.getTime() / 1000);
+  const inserted = await database
+    .insert(reminderDeliveryAttempts)
+    .select(
+      database
+        .select({
+          id: sql<string>`${crypto.randomUUID()}`.as("id"),
+          reminderId: reminderSettings.id,
+          subscriptionId: sql<string>`${subscriptionId}`.as("subscription_id"),
+          occurrenceAt: sql<Date>`${occurrenceTimestamp}`.as("occurrence_at"),
+          localDate: sql<string>`${localDate}`.as("local_date"),
+          attemptCount: sql<number>`1`.as("attempt_count"),
+          lastAttemptAt: sql<Date>`${attemptedTimestamp}`.as("last_attempt_at"),
+          deliveredAt: delivered
+            ? sql<Date>`${attemptedTimestamp}`.as("delivered_at")
+            : sql<Date | null>`null`.as("delivered_at"),
+          createdAt: sql<Date>`${attemptedTimestamp}`.as("created_at"),
+          updatedAt: sql<Date>`${attemptedTimestamp}`.as("updated_at"),
+        })
+        .from(reminderSettings)
+        .where(
+          and(
+            eq(reminderSettings.id, reminderId),
+            eq(reminderSettings.userId, userId),
+            activeReminderDeliveryLease(
+              database,
+              reminderId,
+              userId,
+              localDate,
+              occurrenceAt,
+              token,
+              attemptedAt,
+            ),
+            exists(
+              database
+                .select({ id: pushSubscriptions.id })
+                .from(pushSubscriptions)
+                .where(
+                  and(
+                    eq(pushSubscriptions.id, subscriptionId),
+                    eq(pushSubscriptions.userId, userId),
+                  ),
+                ),
+            ),
+          ),
+        ),
+    )
+    .onConflictDoUpdate({
+      target: [
+        reminderDeliveryAttempts.reminderId,
+        reminderDeliveryAttempts.subscriptionId,
+        reminderDeliveryAttempts.occurrenceAt,
+      ],
+      set: {
+        attemptCount: sql`${reminderDeliveryAttempts.attemptCount} + 1`,
+        lastAttemptAt: attemptedAt,
+        deliveredAt: delivered ? attemptedAt : undefined,
+        updatedAt: attemptedAt,
+      },
+    })
+    .returning({ id: reminderDeliveryAttempts.id });
+  if (inserted.length !== 1) return false;
+
   const quarantineTimestamp = Math.floor(attemptedAt.getTime() / 1000);
-  const rows = await database
+  await database
     .update(pushSubscriptions)
     .set({
       lastReminderLocalDate: delivered ? localDate : undefined,
@@ -230,18 +343,18 @@ export async function recordReminderSubscriptionAttempt(
       and(
         eq(pushSubscriptions.id, subscriptionId),
         eq(pushSubscriptions.userId, userId),
-        activeReminderDeliveryLease(database, userId, localDate, token, attemptedAt),
       ),
-    )
-    .returning({ id: pushSubscriptions.id });
-  return rows.length === 1;
+    );
+  return true;
 }
 
 export async function deleteReminderSubscription(
   database: AppDatabase,
   subscriptionId: string,
+  reminderId: string,
   userId: string,
   localDate: string,
+  occurrenceAt: Date,
   token: string,
   deletedAt: Date,
 ): Promise<boolean> {
@@ -251,7 +364,15 @@ export async function deleteReminderSubscription(
       and(
         eq(pushSubscriptions.id, subscriptionId),
         eq(pushSubscriptions.userId, userId),
-        activeReminderDeliveryLease(database, userId, localDate, token, deletedAt),
+        activeReminderDeliveryLease(
+          database,
+          reminderId,
+          userId,
+          localDate,
+          occurrenceAt,
+          token,
+          deletedAt,
+        ),
       ),
     )
     .returning({ id: pushSubscriptions.id });
