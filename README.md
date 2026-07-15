@@ -180,9 +180,9 @@ tests/                    # Unit, migration-upgrade, and Turso HTTP persistence 
 
 ## Branding (single config point)
 
-All brand-facing identity - product name, PWA manifest fields, icon references, and key copy - lives in **`src/config/branding.ts`**.
-Nothing else hardcodes the product name.
-To rebrand, edit that one file.
+All user-facing brand identity - product name, PWA manifest fields, icon references, and key copy - lives in **`src/config/branding.ts`**.
+The npm package identity is owned separately by `package.json` and propagated to the generated lockfile.
+To rebrand the product, edit the branding config; rename the package only when its package-manager identity should also change.
 
 ## Database and authorization
 
