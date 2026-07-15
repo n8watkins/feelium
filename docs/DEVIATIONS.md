@@ -110,3 +110,29 @@ First-party Insights charts use SVG geometry attributes, and the app's static So
 An injection bug that controls an element's `style` attribute could alter presentation, but it cannot authorize scripts or new inline style elements under this policy.
 The Sonner stylesheet hash test must be updated deliberately when upgrading Sonner.
 Replace `style-src-attr 'unsafe-inline'` if Sonner gains nonce-aware or class-based runtime positioning.
+
+## ADR-004: Behavior categories and multiple daily reminders extend the original MVP
+
+**Date:** 2026-07-15
+**Status:** Accepted
+**Decision by:** Product owner, after the production MVP.
+
+### Context
+
+The immutable PRD defines one optional daily reminder and does not include behavior categories.
+After using the production MVP, the product owner requested color-coded behavior organization, direct editing from Today, and any number of independently managed daily reminder times.
+The original PRD remains unchanged as a historical record, while `docs/HANDOFF.md` describes the current product.
+
+### Decision
+
+Behaviors may belong to an ordered, user-owned category with a constrained color palette.
+Today groups active behaviors by category, places Uncategorized last, and links directly to behavior editing with a return to Today after saving.
+Each user may create any number of daily reminder schedules, with duplicate local times rejected and device subscriptions managed independently from schedules.
+
+### Consequences
+
+- Deleting a category preserves its behaviors and makes them uncategorized.
+- Account export and tracking-data deletion include behavior categories and assignments.
+- Reminder delivery identity includes the reminder, scheduled occurrence, and device subscription so multiple reminders on one local date remain independent.
+- Profile timezone changes and enabled-reminder rescheduling are atomic and guarded against concurrent schedule or preference changes.
+- The original PRD references to one daily reminder describe the shipped MVP baseline, not the current product behavior.

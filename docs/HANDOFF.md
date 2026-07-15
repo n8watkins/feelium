@@ -122,7 +122,7 @@ Full setup is in `README.md`; the short version:
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
-Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
+Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operations`, `test:categories`, `test:migrations`, `test:persistence`, `test:persistence:local`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`, and `db:reset`.
 
 ---
 

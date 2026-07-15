@@ -121,13 +121,14 @@ Web Push and service workers require a secure context.
 
 ## Verification notes
 
-Verified locally against a real Chromium over CDP:
+Verified through authenticated Chromium and focused integration coverage:
 
 - Manifest and service worker serve correctly; the worker registers and reaches the `activated` state with no console errors.
 - Multiple reminder times can be created, edited, paused, enabled, and deleted independently, with duplicate times rejected.
 - Setting up the device creates a real Web Push subscription (FCM endpoint), stored in `push_subscription`.
-- The scheduled send endpoint delivers distinct same-day reminder occurrences to the subscription with timezone-aware due matching.
+- Integration coverage verifies timezone-aware due matching and distinct same-day reminder occurrences per device.
 - The notification deep-link target (`/checkin/new`) renders.
 - Denied permission and unsupported browsers are handled gracefully.
 
-Browser-limited: displaying and clicking an actual OS-level notification cannot be automated headlessly, so the `notificationclick` deep-link is exercised by rendering the target route directly; the push delivery is confirmed by the push service accepting the message (`sent: 1`).
+Browser-limited: displaying and clicking an actual OS-level notification cannot be automated headlessly, so the `notificationclick` deep-link is exercised by rendering the target route directly.
+A prior single-occurrence transport check confirmed that the push service accepted a message (`sent: 1`); multi-reminder occurrence identity is verified at the data-operation layer.
