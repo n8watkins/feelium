@@ -30,8 +30,21 @@ export function PreferencesForm({
     updatePreferencesAction,
     INITIAL_STATE,
   );
-  const [selectedTimeZone, setSelectedTimeZone] = useState(timezone);
-  const [selectedWeekStart, setSelectedWeekStart] = useState(String(weekStartsOn));
+  const [timeZoneSelection, setTimeZoneSelection] = useState({
+    source: timezone,
+    value: timezone,
+  });
+  const weekStartsOnValue = String(weekStartsOn);
+  const [weekStartSelection, setWeekStartSelection] = useState({
+    source: weekStartsOnValue,
+    value: weekStartsOnValue,
+  });
+  const selectedTimeZone =
+    timeZoneSelection.source === timezone ? timeZoneSelection.value : timezone;
+  const selectedWeekStart =
+    weekStartSelection.source === weekStartsOnValue
+      ? weekStartSelection.value
+      : weekStartsOnValue;
 
   return (
     <form
@@ -50,7 +63,9 @@ export function PreferencesForm({
           name="timezone"
           value={selectedTimeZone}
           disabled={isPending}
-          onChange={(event) => setSelectedTimeZone(event.target.value)}
+          onChange={(event) =>
+            setTimeZoneSelection({ source: timezone, value: event.target.value })
+          }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
         >
           {!timezones.includes("UTC") ? <option value="UTC">UTC</option> : null}
@@ -67,7 +82,12 @@ export function PreferencesForm({
           name="weekStartsOn"
           value={selectedWeekStart}
           disabled={isPending}
-          onChange={(event) => setSelectedWeekStart(event.target.value)}
+          onChange={(event) =>
+            setWeekStartSelection({
+              source: weekStartsOnValue,
+              value: event.target.value,
+            })
+          }
           className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
         >
           {weekdays.map((day, index) => (
