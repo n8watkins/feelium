@@ -4,7 +4,7 @@ import type {
   OutcomeDirection,
   OutcomeInputType,
 } from "@/db/schema";
-import { parseISODate } from "@/lib/date";
+import { addDaysISO, parseISODate } from "@/lib/date";
 
 /**
  * Pure analytics engine for the Insights tab (PRD 16). No database or React here - the
@@ -147,17 +147,11 @@ export function formatDifferenceMagnitude(
 // Date helpers (local calendar, matching src/lib/date.ts)
 // ---------------------------------------------------------------------------
 
-function addDaysISO(iso: string, delta: number): string {
-  const d = parseISODate(iso);
-  d.setDate(d.getDate() + delta);
-  return d.toLocaleDateString("en-CA");
-}
-
 /** Inclusive day count between two ISO dates (same date -> 1). */
 function inclusiveDaySpan(startISO: string, endISO: string): number {
   const start = parseISODate(startISO).getTime();
   const end = parseISODate(endISO).getTime();
-  return Math.floor((end - start) / 86_400_000) + 1;
+  return Math.round((end - start) / 86_400_000) + 1;
 }
 
 /**
@@ -254,6 +248,7 @@ function bucketPoints(
     }
     buckets.push({
       label: parseISODate(bucketStart).toLocaleDateString(undefined, {
+        timeZone: "UTC",
         month: "short",
         day: "numeric",
       }),

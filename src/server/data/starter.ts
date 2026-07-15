@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { BatchItem } from "drizzle-orm/batch";
 import { count, eq } from "drizzle-orm";
 
 import type { StarterBehavior, StarterOutcome } from "@/config/tracking";
@@ -30,9 +31,10 @@ export async function createStarterItems(
   starterOutcomes: StarterOutcome[],
 ): Promise<void> {
   const userId = await requireUserId();
-  await db.transaction(async (tx) => {
-    if (starterBehaviors.length > 0) {
-      await tx.insert(behaviors).values(
+  const statements: BatchItem<"sqlite">[] = [];
+  if (starterBehaviors.length > 0) {
+    statements.push(
+      db.insert(behaviors).values(
         starterBehaviors.map((b, index) => ({
           userId,
           name: b.name,
@@ -41,10 +43,12 @@ export async function createStarterItems(
           unit: b.unit ?? null,
           sortOrder: index,
         })),
-      );
-    }
-    if (starterOutcomes.length > 0) {
-      await tx.insert(outcomeMetrics).values(
+      ),
+    );
+  }
+  if (starterOutcomes.length > 0) {
+    statements.push(
+      db.insert(outcomeMetrics).values(
         starterOutcomes.map((o, index) => ({
           userId,
           name: o.name,
@@ -52,7 +56,10 @@ export async function createStarterItems(
           desiredDirection: o.desiredDirection,
           sortOrder: index,
         })),
-      );
-    }
-  });
+      ),
+    );
+  }
+  if (statements.length > 0) {
+    await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+  }
 }

@@ -61,25 +61,34 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 ## Reminder delivery (production)
 
 The actual scheduled send needs a server trigger.
-This project builds the HTTP entry point only; it does not provision any cloud infrastructure.
+The committed GitHub Actions workflow calls the endpoint every five minutes, which keeps Vercel Hobby deployments compatible with their once-daily cron limit.
+Scheduled workflows run from the default branch, so merge the workflow before expecting automatic delivery.
 
 `POST` or `GET` `/api/notifications/send`:
 
-- Authenticated with `Authorization: Bearer <CRON_SECRET>` (Vercel Cron attaches this automatically) or a `?secret=<CRON_SECRET>` query parameter.
-- For every user with the reminder enabled, if the current wall-clock time in their saved timezone matches their reminder time (within `window` minutes, default 1), it pushes the gentle reminder to all of their subscribed devices.
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the scheduled workflow attaches.
+- Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
+- The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
+- If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
+- Each user's delivery has a two-minute atomic lease, so overlapping cron invocations do not process it concurrently and an interrupted invocation becomes retryable automatically.
+- Delivery progress mutations are fenced by the active lease, but Web Push dispatch and its database marker cannot be atomic; a crash or lease loss between them can cause a successful push to be retried, so dispatch remains intentionally at least once.
+- Each invocation attempts at most 25 subscriptions per user and records successful devices individually.
+- Unattempted and transiently failed devices remain pending in a fair resumable queue, even when other devices succeeded or expired subscriptions were pruned.
+- A subscription is quarantined after three consecutive transient failures so a permanently failing endpoint cannot block later daily occurrences; refreshing its browser subscription clears the quarantine.
+- Incomplete deliveries release their lease and move one minute later in the due queue without losing the original local occurrence or starving other candidates.
+- Invalid legacy schedules are disabled with an atomic snapshot check, so they cannot permanently occupy the bounded queue or disable a concurrently corrected reminder.
+- Push requests have a one-second socket timeout and run with bounded user and subscription concurrency, so unreachable endpoints cannot hold the scheduled invocation open one subscription at a time.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports who is due without sending. `?window=N` widens the match (clamped to 60).
 
-In production, run a scheduler every minute against this endpoint.
-Example `vercel.json`:
+The committed schedule runs every five minutes and retries transient HTTP failures without allowing overlapping workflow runs.
+Configure these GitHub repository settings before enabling reminders in production:
 
-```json
-{
-  "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }]
-}
-```
+- Set the `REMINDER_CRON_URL` Actions variable to the production deployment origin, such as `https://feelium.example`.
+- Set the `CRON_SECRET` Actions secret to the same random value as the production deployment's `CRON_SECRET` environment variable.
 
-Set `CRON_SECRET` as a project environment variable so the endpoint is protected.
+GitHub may delay scheduled workflows during periods of high load.
+The endpoint's ten-minute due window tolerates one delayed five-minute invocation, and the persisted due queue plus retry-safe delivery state protects overlapping or retried requests.
 
 A manual test send (to the current user's own devices, ignoring the schedule) is available from the `Settings > Notifications` screen via "Send a test".
 

@@ -3,8 +3,10 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { profiles, users } from "@/db/schema";
+import { profiles } from "@/db/schema";
+import { isValidTimeZone } from "@/lib/date";
 import { StaleSessionError } from "./errors";
+import { ensureProfileForUser, syncProfileTimeZone } from "./profile-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -16,19 +18,11 @@ import { requireUserId } from "./session";
  * raise StaleSessionError so the layout can sign the request out cleanly instead of
  * crashing with a foreign-key error.
  */
-export async function ensureProfile(): Promise<void> {
+export async function ensureProfile() {
   const userId = await requireUserId();
-
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  if (!user) {
-    throw new StaleSessionError();
-  }
-
-  await db.insert(profiles).values({ userId }).onConflictDoNothing();
+  const profile = await ensureProfileForUser(db, userId);
+  if (!profile) throw new StaleSessionError();
+  return profile;
 }
 
 export async function getCurrentProfile() {
@@ -39,4 +33,37 @@ export async function getCurrentProfile() {
     .where(eq(profiles.userId, userId))
     .limit(1);
   return profile ?? null;
+}
+
+export type ProfilePreferences = {
+  timezone: string;
+  weekStartsOn: number;
+};
+
+/** Updates the current user's calendar preferences after validating their ranges. */
+export async function updateProfilePreferences(
+  input: ProfilePreferences,
+): Promise<void> {
+  if (!isValidTimeZone(input.timezone)) throw new Error("INVALID_TIMEZONE");
+  if (!Number.isInteger(input.weekStartsOn) || input.weekStartsOn < 0 || input.weekStartsOn > 6) {
+    throw new Error("INVALID_WEEK_START");
+  }
+
+  const userId = await requireUserId();
+  await db
+    .update(profiles)
+    .set({
+      timezone: input.timezone,
+      autoSyncTimezone: false,
+      weekStartsOn: input.weekStartsOn,
+      updatedAt: new Date(),
+    })
+    .where(eq(profiles.userId, userId));
+}
+
+/** Updates only the timezone detected by the signed-in user's browser. */
+export async function updateProfileTimeZone(timezone: string): Promise<void> {
+  if (!isValidTimeZone(timezone)) throw new Error("INVALID_TIMEZONE");
+  const userId = await requireUserId();
+  await syncProfileTimeZone(db, userId, timezone);
 }

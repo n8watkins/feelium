@@ -54,13 +54,22 @@ async function ownedAnsweredValues(
   if (answered.length === 0) return [];
   const ids = [...new Set(answered.map((v) => v.outcomeMetricId))];
   const owned = await database
-    .select({ id: outcomeMetrics.id })
+    .select({ id: outcomeMetrics.id, inputType: outcomeMetrics.inputType })
     .from(outcomeMetrics)
     .where(
       and(eq(outcomeMetrics.userId, userId), inArray(outcomeMetrics.id, ids)),
     );
-  const ownedSet = new Set(owned.map((o) => o.id));
-  return answered.filter((v) => ownedSet.has(v.outcomeMetricId));
+  const ownedTypes = new Map(owned.map((outcome) => [outcome.id, outcome.inputType]));
+  return answered.filter((value) => {
+    const inputType = ownedTypes.get(value.outcomeMetricId);
+    if (!inputType) return false;
+    const matches =
+      (inputType === "rating" && value.rating != null && value.boolean == null && value.numeric == null) ||
+      (inputType === "boolean" && value.rating == null && value.boolean != null && value.numeric == null) ||
+      (inputType === "numeric" && value.rating == null && value.boolean == null && value.numeric != null);
+    if (!matches) throw new Error("INVALID_VALUE_TYPE");
+    return true;
+  });
 }
 
 // Resolves the final tag id set: owned existing ids plus newly-created (deduped) tags.

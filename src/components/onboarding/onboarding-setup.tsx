@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 export function OnboardingSetup() {
   const [mode, setMode] = useState<"choose" | "customize">("choose");
@@ -26,6 +27,13 @@ export function OnboardingSetup() {
     completeCustomSetupAction,
     {},
   );
+
+  function captureTimezone(event: React.FormEvent<HTMLFormElement>) {
+    const field = event.currentTarget.elements.namedItem("timezone");
+    if (field instanceof HTMLInputElement) {
+      field.value = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    }
+  }
 
   if (mode === "choose") {
     return (
@@ -39,7 +47,8 @@ export function OnboardingSetup() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <form action={useSuggestedSetupAction}>
+            <form action={useSuggestedSetupAction} onSubmit={captureTimezone}>
+              <input type="hidden" name="timezone" defaultValue="UTC" />
               <Button type="submit">Use these</Button>
             </form>
           </CardFooter>
@@ -77,7 +86,8 @@ export function OnboardingSetup() {
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} onSubmit={captureTimezone} className="space-y-6">
+      <input type="hidden" name="timezone" defaultValue="UTC" />
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Behaviors</legend>
         <ul className="space-y-2">
@@ -95,6 +105,7 @@ export function OnboardingSetup() {
               <Input
                 name={`behavior-${index}-name`}
                 defaultValue={behavior.name}
+                maxLength={MAX_NAME_LENGTH}
                 aria-label={`Behavior ${index + 1} name`}
               />
             </li>
@@ -119,6 +130,7 @@ export function OnboardingSetup() {
               <Input
                 name={`outcome-${index}-name`}
                 defaultValue={outcome.name}
+                maxLength={MAX_NAME_LENGTH}
                 aria-label={`Outcome ${index + 1} name`}
               />
             </li>

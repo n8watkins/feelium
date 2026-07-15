@@ -22,7 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentProfile } from "@/server/data";
-import { signOut } from "./actions";
+import { signOut, updatePreferencesAction } from "./actions";
 
 const WEEKDAYS = [
   "Sunday",
@@ -33,6 +33,8 @@ const WEEKDAYS = [
   "Friday",
   "Saturday",
 ];
+
+const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
 const TRACKING_LINKS: {
   href: string;
@@ -48,7 +50,6 @@ const TRACKING_LINKS: {
 export default async function SettingsPage() {
   const session = await auth();
   const profile = await getCurrentProfile();
-  const weekStart = WEEKDAYS[profile?.weekStartsOn ?? 1] ?? "Monday";
 
   return (
     <>
@@ -72,7 +73,7 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Preferences</CardTitle>
             <CardDescription>
-              Editing timezone and start of week arrives with tracking setup.
+              Calendar dates and summaries use these preferences.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -80,16 +81,40 @@ export default async function SettingsPage() {
               <span className="text-sm font-medium">Theme</span>
               <ModeToggle />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Timezone</span>
-              <span className="text-sm text-muted-foreground">
-                {profile?.timezone ?? "UTC"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Start of week</span>
-              <span className="text-sm text-muted-foreground">{weekStart}</span>
-            </div>
+            <form action={updatePreferencesAction} className="space-y-4 border-t border-border pt-4">
+              <label className="grid gap-1.5 text-sm font-medium">
+                Timezone
+                <select
+                  name="timezone"
+                  defaultValue={profile?.timezone ?? "UTC"}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {!TIMEZONES.includes("UTC") ? <option value="UTC">UTC</option> : null}
+                  {TIMEZONES.map((timezone) => (
+                    <option key={timezone} value={timezone}>
+                      {timezone.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Start of week
+                <select
+                  name="weekStartsOn"
+                  defaultValue={String(profile?.weekStartsOn ?? 1)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {WEEKDAYS.map((day, index) => (
+                    <option key={day} value={index}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button type="submit" variant="outline">
+                Save preferences
+              </Button>
+            </form>
           </CardContent>
         </Card>
 

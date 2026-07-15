@@ -8,11 +8,17 @@ import {
   deleteMyPushSubscription,
   listMyPushSubscriptions,
   savePushSubscription,
+  updateReminderTimezone,
   upsertReminderSettings,
   type ReminderSettings,
   type WebPushSubscriptionJSON,
 } from "@/server/data";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
+import {
+  deviceNameSchema,
+  pushSubscriptionSchema,
+  reminderSettingsSchema,
+} from "@/lib/validation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -28,11 +34,13 @@ export async function subscribeToPushAction(
   subscription: WebPushSubscriptionJSON,
   deviceName?: string,
 ): Promise<ActionResult> {
-  if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+  const parsed = pushSubscriptionSchema.safeParse(subscription);
+  const parsedDeviceName = deviceNameSchema.safeParse(deviceName);
+  if (!parsed.success || !parsedDeviceName.success) {
     return { ok: false, error: "That push subscription looks invalid." };
   }
   try {
-    await savePushSubscription(subscription, deviceName ?? null);
+    await savePushSubscription(parsed.data, parsedDeviceName.data ?? null);
   } catch {
     return { ok: false, error: "Could not save your subscription. Please try again." };
   }
@@ -56,25 +64,33 @@ export async function unsubscribeFromPushAction(endpoint: string): Promise<Actio
 export async function saveReminderSettingsAction(
   input: ReminderSettings,
 ): Promise<ActionResult> {
-  const timezone = (input.timezone || "").trim();
-  if (!timezone) return { ok: false, error: "Missing timezone." };
-
-  const hasValidTime = Boolean(input.reminderTime && TIME_RE.test(input.reminderTime));
-  if (input.isEnabled && !hasValidTime) {
+  const normalized = {
+    ...input,
+    reminderTime: input.reminderTime && TIME_RE.test(input.reminderTime) ? input.reminderTime : null,
+  };
+  const parsed = reminderSettingsSchema.safeParse(normalized);
+  if (!parsed.success || (parsed.data.isEnabled && !parsed.data.reminderTime)) {
     return { ok: false, error: "Choose a valid reminder time." };
   }
 
   try {
-    await upsertReminderSettings({
-      isEnabled: input.isEnabled,
-      reminderTime: hasValidTime ? input.reminderTime : null,
-      timezone,
-    });
+    await upsertReminderSettings(parsed.data);
   } catch {
     return { ok: false, error: "Could not save your reminder. Please try again." };
   }
   revalidatePath("/settings/notifications");
   return { ok: true };
+}
+
+/** Updates only the timezone of an already-enabled reminder after browser detection. */
+export async function syncReminderTimezoneAction(timezone: string): Promise<void> {
+  const parsed = reminderSettingsSchema.shape.timezone.safeParse(timezone);
+  if (!parsed.success) return;
+  try {
+    await updateReminderTimezone(parsed.data);
+  } catch {
+    // This background synchronization is best-effort. The next explicit save retries it.
+  }
 }
 
 export type TestSendResult = { ok: true; sent: number } | { ok: false; error: string };

@@ -14,6 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  MAX_DESCRIPTION_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_UNIT_LENGTH,
+} from "@/lib/validation";
 
 export type BehaviorFormDefaults = {
   name?: string;
@@ -74,6 +79,7 @@ export function BehaviorForm({
           name="name"
           defaultValue={state.values?.name ?? defaults?.name}
           required
+          maxLength={MAX_NAME_LENGTH}
           aria-invalid={Boolean(errors.name)}
           aria-describedby={errors.name ? "name-error" : undefined}
         />
@@ -172,6 +178,7 @@ export function BehaviorForm({
             name="unit"
             defaultValue={state.values?.unit ?? defaults?.unit}
             placeholder="cups, minutes, pages…"
+            maxLength={MAX_UNIT_LENGTH}
             aria-invalid={Boolean(errors.unit)}
             aria-describedby={errors.unit ? "unit-error" : undefined}
           />
@@ -193,6 +200,7 @@ export function BehaviorForm({
           id="description"
           name="description"
           defaultValue={state.values?.description ?? defaults?.description}
+          maxLength={MAX_DESCRIPTION_LENGTH}
         />
       </div>
 
@@ -206,6 +214,7 @@ export function BehaviorForm({
           name="customPrompt"
           defaultValue={state.values?.customPrompt ?? defaults?.customPrompt}
           placeholder="Did you doomscroll today?"
+          maxLength={MAX_DESCRIPTION_LENGTH}
         />
       </div>
 

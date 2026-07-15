@@ -46,7 +46,7 @@ export function ConfirmDeleteDialog({
   confirmHint: React.ReactNode;
   confirmLabel: string;
   pendingLabel: string;
-  action: () => Promise<DeleteResult>;
+  action: (confirmation: string) => Promise<DeleteResult>;
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -68,7 +68,7 @@ export function ConfirmDeleteDialog({
     startTransition(async () => {
       // On success the action redirects and this component unmounts; only a returned
       // failure reaches here.
-      const result = await action();
+      const result = await action(value.trim());
       if (!result.ok) {
         const message = result.error ?? "Something went wrong. Please try again.";
         setError(message);

@@ -3,24 +3,32 @@ import type { PushSubscription as WebPushSubscription } from "web-push";
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
-  deletePushSubscriptionByEndpoint,
-  listEnabledReminders,
-  listPushSubscriptionsForUser,
+  claimReminderDelivery,
+  completeReminderDelivery,
+  deletePushSubscriptionForReminder,
+  disableInvalidReminder,
+  hasPendingPushSubscriptionsForReminder,
+  listReminderCandidates,
+  listPushSubscriptionsForReminder,
+  markPushSubscriptionAttempt,
+  releaseReminderDelivery,
+  renewReminderDelivery,
+  scheduleNextReminder,
+  type ReminderCandidate,
 } from "@/server/data";
+import { evaluateReminder, type ReminderEvaluation } from "@/lib/reminders";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
  * Scheduled reminder-send endpoint (PRD 17).
  *
- * PRODUCTION: a scheduled trigger (e.g. a Vercel Cron running every minute) calls this
- * endpoint. Vercel automatically attaches `Authorization: Bearer <CRON_SECRET>`; we
- * verify it against the CRON_SECRET env var. Nothing here builds cloud infra - it is just
- * the HTTP entry point a scheduler drives. Example vercel.json:
- *   { "crons": [{ "path": "/api/notifications/send", "schedule": "* * * * *" }] }
+ * PRODUCTION: the committed GitHub Actions schedule calls this endpoint every five
+ * minutes with `Authorization: Bearer <CRON_SECRET>`; we verify it against the
+ * CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
  *
- * For each user with the reminder enabled, if the current wall-clock time in their saved
- * timezone matches their reminder time (within `window` minutes, default 1), we push the
- * gentle daily reminder to all of their subscribed devices and prune any that are gone.
+ * For each user with the reminder enabled, if the resolved occurrence in their saved
+ * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
+ * all of their subscribed devices and prune any that are gone.
  *
  * Manual/local testing (no cloud):
  *   curl -X POST "http://localhost:3002/api/notifications/send?secret=$CRON_SECRET"
@@ -34,42 +42,23 @@ export const dynamic = "force-dynamic";
 const REMINDER_TITLE = "Ready for a quick check-in?";
 const REMINDER_BODY = "Take a moment to record what you did and how you felt.";
 const REMINDER_URL = "/checkin/new";
-
-/** Current wall-clock "HH:MM" in the given IANA timezone, or null if the tz is invalid. */
-function currentHHMM(timezone: string, now: Date): string | null {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(now);
-    const hh = parts.find((p) => p.type === "hour")?.value;
-    const mm = parts.find((p) => p.type === "minute")?.value;
-    if (hh == null || mm == null) return null;
-    return `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}`;
-  } catch {
-    return null;
-  }
-}
-
-function minutesOfDay(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-
-/** True when `now` is within [reminder, reminder + window) minutes (handles midnight wrap). */
-function isDue(reminderTime: string, nowHHMM: string, windowMinutes: number): boolean {
-  const diff = (minutesOfDay(nowHHMM) - minutesOfDay(reminderTime) + 1440) % 1440;
-  return diff < windowMinutes;
-}
+const DEFAULT_WINDOW_MINUTES = 10;
+const MAX_CANDIDATES_PER_RUN = 100;
+const SEND_CONCURRENCY = 10;
+const MAX_SUBSCRIPTIONS_PER_USER_PER_RUN = 25;
+const SUBSCRIPTION_DISPATCH_BATCH_SIZE = 5;
+const REMINDER_DELIVERY_LEASE_MS = 2 * 60_000;
+const REMINDER_RETRY_DELAY_MS = 60_000;
+const MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION = 3;
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // never allow when unconfigured
   const auth = request.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
-  return request.nextUrl.searchParams.get("secret") === secret;
+  return (
+    process.env.NODE_ENV !== "production" && request.nextUrl.searchParams.get("secret") === secret
+  );
 }
 
 async function handle(request: NextRequest) {
@@ -84,56 +73,229 @@ async function handle(request: NextRequest) {
   }
 
   const params = request.nextUrl.searchParams;
-  const windowMinutes = Math.max(1, Math.min(60, Number(params.get("window")) || 1));
+  const windowMinutes = Math.max(
+    1,
+    Math.min(60, Number(params.get("window")) || DEFAULT_WINDOW_MINUTES),
+  );
   const dryRun = params.get("dryRun") === "1";
   const now = new Date();
 
-  const reminders = await listEnabledReminders();
-  const due = reminders.filter((r) => {
-    const nowHHMM = currentHHMM(r.timezone, now);
-    return nowHHMM !== null && isDue(r.reminderTime, nowHHMM, windowMinutes);
-  });
+  const candidates = await listReminderCandidates(now, MAX_CANDIDATES_PER_RUN);
+  const evaluated: Array<ReminderCandidate & ReminderEvaluation> = [];
+  const invalid: ReminderCandidate[] = [];
+  for (const reminder of candidates) {
+    try {
+      const evaluation = evaluateReminder(
+        reminder.reminderTime,
+        reminder.timezone,
+        now,
+        windowMinutes,
+      );
+      evaluated.push({
+        ...reminder,
+        ...evaluation,
+        due: evaluation.due || reminder.deliveryLocalDate !== null,
+        localDate: reminder.deliveryLocalDate ?? evaluation.localDate,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        [
+          "INVALID_REMINDER_TIME",
+          "INVALID_TIMEZONE",
+          "UNRESOLVABLE_REMINDER_TIME",
+        ].includes(error.message)
+      ) {
+        invalid.push(reminder);
+        continue;
+      }
+      throw error;
+    }
+  }
+  const due = evaluated.filter((reminder) => reminder.due);
 
   if (dryRun) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
       windowMinutes,
+      candidates: candidates.length,
+      invalidCandidates: invalid.length,
       dueUsers: due.length,
-      due: due.map((r) => ({ userId: r.userId, reminderTime: r.reminderTime, timezone: r.timezone })),
+      due: due.map((r) => ({
+        userId: r.userId,
+        reminderTime: r.reminderTime,
+        timezone: r.timezone,
+        localDate: r.localDate,
+      })),
     });
   }
 
   let sent = 0;
   let pruned = 0;
   let failed = 0;
-  for (const reminder of due) {
-    const subs = await listPushSubscriptionsForUser(reminder.userId);
-    for (const sub of subs) {
-      const result = await sendPush(sub.subscriptionData as unknown as WebPushSubscription, {
-        title: REMINDER_TITLE,
-        body: REMINDER_BODY,
-        url: REMINDER_URL,
-      });
-      if (result.ok) {
-        sent += 1;
-      } else if (result.gone) {
-        await deletePushSubscriptionByEndpoint(sub.endpoint);
-        pruned += 1;
-      } else {
-        failed += 1;
+  let claimedUsers = 0;
+  const disabledInvalid = (await Promise.all(invalid.map(disableInvalidReminder))).filter(
+    Boolean,
+  ).length;
+  const notDue = evaluated.filter((reminder) => !reminder.due);
+  await Promise.all(
+    notDue.map((reminder) => scheduleNextReminder(reminder, reminder.nextAt)),
+  );
+
+  async function sendForUser(reminder: (typeof due)[number]) {
+    let userSent = 0;
+    let userPruned = 0;
+    let userFailed = 0;
+    let claimToken: string | null = null;
+    let hasPendingSubscriptions = true;
+    let ownsLease = true;
+    try {
+      claimToken = await claimReminderDelivery(
+        reminder,
+        reminder.localDate,
+        new Date(),
+        REMINDER_DELIVERY_LEASE_MS,
+      );
+      if (!claimToken) {
+        return;
       }
+      claimedUsers += 1;
+
+      const subscriptions = await listPushSubscriptionsForReminder(
+        reminder.userId,
+        reminder.localDate,
+        MAX_SUBSCRIPTIONS_PER_USER_PER_RUN,
+      );
+      for (
+        let offset = 0;
+        offset < subscriptions.length;
+        offset += SUBSCRIPTION_DISPATCH_BATCH_SIZE
+      ) {
+        ownsLease = await renewReminderDelivery(
+          reminder.userId,
+          reminder.localDate,
+          claimToken,
+          new Date(),
+          REMINDER_DELIVERY_LEASE_MS,
+        );
+        if (!ownsLease) break;
+
+        const results = await Promise.all(
+          subscriptions
+            .slice(offset, offset + SUBSCRIPTION_DISPATCH_BATCH_SIZE)
+            .map(async (subscription) => ({
+              subscription,
+              result: await sendPush(
+                subscription.subscriptionData as unknown as WebPushSubscription,
+                {
+                  title: REMINDER_TITLE,
+                  body: REMINDER_BODY,
+                  url: REMINDER_URL,
+                },
+              ),
+            })),
+        );
+        for (const { subscription, result } of results) {
+          const mutatedAt = new Date();
+          let mutationApplied: boolean;
+          if (result.ok) {
+            mutationApplied = await markPushSubscriptionAttempt(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              true,
+              mutatedAt,
+              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
+            );
+            userSent += 1;
+          } else if (result.gone) {
+            mutationApplied = await deletePushSubscriptionForReminder(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              mutatedAt,
+            );
+            userPruned += 1;
+          } else {
+            mutationApplied = await markPushSubscriptionAttempt(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              false,
+              mutatedAt,
+              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
+            );
+            userFailed += 1;
+          }
+          if (!mutationApplied) ownsLease = false;
+        }
+        if (!ownsLease) break;
+      }
+      if (ownsLease) {
+        hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
+          reminder.userId,
+          reminder.localDate,
+        );
+      }
+    } catch {
+      userFailed += 1;
+    }
+
+    sent += userSent;
+    pruned += userPruned;
+    failed += userFailed;
+    if (!claimToken || !ownsLease) return;
+    try {
+      const finalizedAt = new Date();
+      let finalized: boolean;
+      if (hasPendingSubscriptions) {
+        finalized = await releaseReminderDelivery(
+          reminder.userId,
+          reminder.localDate,
+          claimToken,
+          finalizedAt,
+          new Date(finalizedAt.getTime() + REMINDER_RETRY_DELAY_MS),
+        );
+      } else {
+        finalized = await completeReminderDelivery(
+          reminder.userId,
+          reminder.localDate,
+          claimToken,
+          finalizedAt,
+          reminder.nextAt,
+        );
+      }
+      if (!finalized) failed += 1;
+    } catch {
+      failed += 1;
     }
   }
 
-  return NextResponse.json({ ok: true, dueUsers: due.length, sent, pruned, failed });
+  for (let offset = 0; offset < due.length; offset += SEND_CONCURRENCY) {
+    await Promise.all(due.slice(offset, offset + SEND_CONCURRENCY).map(sendForUser));
+  }
+
+  return NextResponse.json({
+    ok: true,
+    candidates: candidates.length,
+    disabledInvalid,
+    dueUsers: due.length,
+    claimedUsers,
+    sent,
+    pruned,
+    failed,
+  });
 }
 
 export async function POST(request: NextRequest) {
   return handle(request);
 }
 
-// Vercel Cron issues GET requests, so support both verbs.
+// Support GET for compatible external schedulers as well as the committed POST workflow.
 export async function GET(request: NextRequest) {
   return handle(request);
 }

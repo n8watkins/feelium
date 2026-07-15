@@ -82,12 +82,19 @@ Local development runs entirely offline against a plain SQLite file; production 
 | `npm run build`      | Production build                                    |
 | `npm run typecheck`  | TypeScript type checking (`tsc --noEmit`)           |
 | `npm run lint`       | ESLint                                              |
+| `npm test`           | Run the fast unit-test suite                         |
 | `npm run db:generate`| Generate SQL migrations from the Drizzle schema     |
 | `npm run db:migrate` | Apply migrations to the local SQLite file           |
 | `npm run db:seed`    | Seed local demo tracking data (see note below)      |
 | `npm run db:studio`  | Open Drizzle Studio to browse the local database    |
 | `npm run db:reset`   | Delete and recreate the local database from migrations |
+| `npm run test:data-operations` | Verify atomic profile and reminder operations |
+| `npm run test:migrations` | Verify fresh migrations and legacy-data upgrades |
 | `npm run test:persistence` | Integration test for Turso-safe check-in writes (`db.batch`) |
+| `npm run test:persistence:local` | Start disposable Turso HTTP and run persistence integration |
+
+GitHub Actions runs install, lint, type checking, unit tests, atomic data-operation tests, fresh and upgrade migrations, real Turso HTTP persistence, and the production build for every pull request and push to `main`.
+The lower-level `test:persistence` command still accepts `TEST_LIBSQL_URL` when you want to exercise a separately managed disposable libSQL or Turso database.
 
 > `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for local exploration. It also creates a `demo@example.com` password account, but that password login no longer works because the credentials provider is disabled (GitHub-only). The seeded tracking data is still useful for exercising History and Insights locally.
 
@@ -168,14 +175,14 @@ src/
     push/                 # Web Push transport
   lib/                    # Nav config, redirect guard, utils
 drizzle/                  # Generated SQL migrations (committed)
-tests/                    # checkin-persistence.test.ts (Turso db.batch integration test)
+tests/                    # Unit, migration-upgrade, and Turso HTTP persistence tests
 ```
 
 ## Branding (single config point)
 
-All brand-facing identity - product name, PWA manifest fields, icon references, and key copy - lives in **`src/config/branding.ts`**.
-Nothing else hardcodes the product name.
-To rebrand, edit that one file.
+All user-facing brand identity - product name, PWA manifest fields, icon references, and key copy - lives in **`src/config/branding.ts`**.
+The npm package identity is owned separately by `package.json` and propagated to the generated lockfile.
+To rebrand the product, edit the branding config; rename the package only when its package-manager identity should also change.
 
 ## Database and authorization
 

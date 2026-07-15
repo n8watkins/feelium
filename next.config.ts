@@ -9,7 +9,15 @@ import type { NextConfig } from "next";
 // always resolves against its own node_modules.
 const appRoot = __dirname;
 
+const securityHeaders = [
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   turbopack: {
     root: appRoot,
   },
@@ -20,10 +28,13 @@ const nextConfig: NextConfig = {
     "@libsql/client",
     "bcryptjs",
     "@auth/drizzle-adapter",
-    "nodemailer",
   ],
   async headers() {
     return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
       {
         // The service worker must never be cached, or clients get stuck on a stale
         // worker and miss updates. It also needs a correct JS content type and to be

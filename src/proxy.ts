@@ -1,12 +1,13 @@
 import NextAuth from "next-auth";
 import {
+  NextRequest,
   NextResponse,
   type NextFetchEvent,
   type NextMiddleware,
-  type NextRequest,
 } from "next/server";
 
 import authConfig from "@/auth.config";
+import { buildContentSecurityPolicy } from "@/lib/security-headers";
 
 // Next.js 16 proxy (renamed middleware). Uses the dependency-light auth config so this
 // path never bundles the DB adapter or Node-only modules. Auth.js decodes the JWT into
@@ -24,20 +25,40 @@ const authMiddleware = auth((req) => {
     if (isLoggedIn) {
       return NextResponse.redirect(new URL("/today", req.nextUrl));
     }
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: req.headers } });
   }
 
   if (!isLoggedIn) {
-    return NextResponse.redirect(new URL("/login", req.nextUrl));
+    const loginUrl = new URL("/login", req.nextUrl);
+    loginUrl.searchParams.set("next", `${req.nextUrl.pathname}${req.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: req.headers } });
 }) as unknown as NextMiddleware;
 
 // Next 16 statically requires a named `proxy` (or default) function export, so wrap the
 // Auth.js middleware in one.
-export default function proxy(request: NextRequest, event: NextFetchEvent) {
-  return authMiddleware(request, event);
+export default async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const contentSecurityPolicy = buildContentSecurityPolicy(
+    nonce,
+    process.env.NODE_ENV === "development",
+  );
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+  const requestWithSecurityHeaders = new NextRequest(request, {
+    headers: requestHeaders,
+  });
+  const response = await authMiddleware(requestWithSecurityHeaders, event);
+  const securedResponse =
+    response ??
+    NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+  securedResponse.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  return securedResponse;
 }
 
 export const config = {

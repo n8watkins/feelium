@@ -10,6 +10,9 @@ import {
   type StarterOutcome,
 } from "@/config/tracking";
 import { createStarterItems, getTrackingCounts } from "@/server/data";
+import { updateProfileTimeZone } from "@/server/data";
+import { isValidTimeZone } from "@/lib/date";
+import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 export type OnboardingState = { error?: string };
 
@@ -19,10 +22,12 @@ async function alreadySetUp(): Promise<boolean> {
 }
 
 /** Path 1: accept the suggested set as-is. */
-export async function useSuggestedSetupAction() {
+export async function useSuggestedSetupAction(formData: FormData) {
   if (!(await alreadySetUp())) {
     await createStarterItems(STARTER_BEHAVIORS, STARTER_OUTCOMES);
   }
+  const timezone = String(formData.get("timezone") ?? "");
+  if (isValidTimeZone(timezone)) await updateProfileTimeZone(timezone);
   revalidatePath("/today");
   redirect("/today");
 }
@@ -36,12 +41,15 @@ export async function completeCustomSetupAction(
     redirect("/today");
   }
 
+  const timezone = String(formData.get("timezone") ?? "");
+
   const behaviors: StarterBehavior[] = [];
   STARTER_BEHAVIORS.forEach((behavior, index) => {
     if (formData.get(`behavior-${index}-included`) !== "on") return;
     const name =
       String(formData.get(`behavior-${index}-name`) ?? "").trim() ||
       behavior.name;
+    if (name.length > MAX_NAME_LENGTH) return;
     behaviors.push({ ...behavior, name });
   });
 
@@ -50,6 +58,7 @@ export async function completeCustomSetupAction(
     if (formData.get(`outcome-${index}-included`) !== "on") return;
     const name =
       String(formData.get(`outcome-${index}-name`) ?? "").trim() || outcome.name;
+    if (name.length > MAX_NAME_LENGTH) return;
     outcomes.push({ ...outcome, name });
   });
 
@@ -60,6 +69,7 @@ export async function completeCustomSetupAction(
   }
 
   await createStarterItems(behaviors, outcomes);
+  if (isValidTimeZone(timezone)) await updateProfileTimeZone(timezone);
   revalidatePath("/today");
   redirect("/today");
 }

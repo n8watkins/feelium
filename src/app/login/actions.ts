@@ -20,7 +20,7 @@ function readEmail(formData: FormData): string {
 
 /**
  * DEFAULT sign-in: email magic link. In local dev the link is printed to the server
- * console by the Nodemailer provider's sendVerificationRequest override.
+ * console by the development email provider's sendVerificationRequest implementation.
  */
 export async function sendMagicLink(formData: FormData) {
   const email = readEmail(formData);

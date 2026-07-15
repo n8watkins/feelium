@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
+import { TimezoneSync } from "@/components/timezone-sync";
 import { ensureProfile, StaleSessionError } from "@/server/data";
 
 /**
@@ -21,8 +22,9 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  let profile: Awaited<ReturnType<typeof ensureProfile>>;
   try {
-    await ensureProfile();
+    profile = await ensureProfile();
   } catch (error) {
     // Stale JWT whose user was deleted (account deletion elsewhere, or a dev DB reset):
     // route through the recovery sign-out, which clears the cookie and lands on /login.
@@ -34,6 +36,10 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-dvh">
+      <TimezoneSync
+        currentTimeZone={profile.timezone}
+        shouldSync={profile.autoSyncTimezone}
+      />
       <AppSidebar />
       <div className="flex min-h-dvh flex-1 flex-col">
         <main className="mx-auto w-full max-w-2xl flex-1 pb-24 md:pb-10">

@@ -144,14 +144,14 @@ export async function moveBehavior(id: string, direction: "up" | "down") {
 
   const a = active[index];
   const b = active[swapIndex];
-  await db.transaction(async (tx) => {
-    await tx
+  await db.batch([
+    db
       .update(behaviors)
       .set({ sortOrder: b.sortOrder })
-      .where(and(eq(behaviors.id, a.id), eq(behaviors.userId, userId)));
-    await tx
+      .where(and(eq(behaviors.id, a.id), eq(behaviors.userId, userId))),
+    db
       .update(behaviors)
       .set({ sortOrder: a.sortOrder })
-      .where(and(eq(behaviors.id, b.id), eq(behaviors.userId, userId)));
-  });
+      .where(and(eq(behaviors.id, b.id), eq(behaviors.userId, userId))),
+  ]);
 }

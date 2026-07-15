@@ -83,4 +83,30 @@ The email magic-link and email/password providers are **disabled but preserved a
 
 ### Re-enabling
 
-When a verified Resend sender domain (or an alternative email transport) is available, follow the re-enable note in `src/auth.ts`: uncomment the provider imports and definitions, add them back to the `providers` array, and restore the email/password + magic-link UI in `src/app/login/page.tsx`. No server-side rewrite is needed.
+When a verified Resend sender domain (or an alternative email transport) is available, follow the re-enable note in `src/auth.ts`: uncomment the provider imports and definitions, add them back to the `providers` array, and restore the email/password + magic-link UI in `src/app/login/page.tsx`.
+The development provider is a plain Auth.js `EmailConfig` that prints links to the server console, so restoring it does not require Nodemailer or an SMTP dependency.
+No server-side rewrite is needed.
+
+## ADR-003: CSP permits style attributes for Sonner runtime geometry
+
+**Date:** 2026-07-14
+**Status:** Accepted
+**Decision by:** General (fleet), during hardening review.
+
+### Context
+
+Production uses a per-request nonce and `strict-dynamic` for scripts, and does not permit `unsafe-inline` in `script-src`.
+Next.js applies the nonce to its framework scripts and generated style elements.
+Sonner still requires dynamic style attributes for toast positions, offsets, heights, and swipe gestures, and injects a version-pinned stylesheet at runtime.
+
+### Decision
+
+Production keeps style elements restricted to the request nonce, same-origin stylesheets, and the exact SHA-256 hash of Sonner 2.0.7's injected stylesheet.
+Only `style-src-attr` permits `unsafe-inline`, narrowly allowing Sonner's runtime geometry without weakening `script-src` or allowing arbitrary inline style elements.
+First-party Insights charts use SVG geometry attributes, and the app's static Sonner theme variables live in `globals.css` instead of React style attributes.
+
+### Consequences
+
+An injection bug that controls an element's `style` attribute could alter presentation, but it cannot authorize scripts or new inline style elements under this policy.
+The Sonner stylesheet hash test must be updated deliberately when upgrading Sonner.
+Replace `style-src-attr 'unsafe-inline'` if Sonner gains nonce-aware or class-based runtime positioning.

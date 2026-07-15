@@ -8,10 +8,12 @@ import { BehaviorLogRow } from "@/components/tracking/behavior-log-row";
 import { SavedCheckInToast } from "@/components/tracking/saved-check-in-toast";
 import { Button } from "@/components/ui/button";
 import { formatOutcomeValue } from "@/config/tracking";
+import { dateISOInTimeZone, DEFAULT_TIME_ZONE } from "@/lib/date";
 import {
   countCheckInsForDate,
   getEntriesForDate,
   getLatestCheckIn,
+  getCurrentProfile,
   getTrackingCounts,
   listActiveBehaviors,
 } from "@/server/data";
@@ -28,13 +30,16 @@ export default async function TodayPage({
     redirect("/onboarding");
   }
 
+  const profile = await getCurrentProfile();
+  const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
   const now = new Date();
   const heading = now.toLocaleDateString(undefined, {
+    timeZone,
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const localDate = now.toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const localDate = dateISOInTimeZone(now, timeZone);
 
   const [behaviors, entries, checkInsToday, latest] = await Promise.all([
     listActiveBehaviors(),
@@ -122,6 +127,7 @@ export default async function TodayPage({
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
                   {latest.checkIn.occurredAt.toLocaleTimeString(undefined, {
+                    timeZone,
                     hour: "numeric",
                     minute: "2-digit",
                   })}

@@ -4,13 +4,30 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { formatDayFull, relativeDayLabel } from "@/lib/date";
-import { listHistoryDays, type HistoryDay } from "@/server/data";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  DEFAULT_TIME_ZONE,
+  formatDayFull,
+  relativeDayLabel,
+  startOfWeekISO,
+} from "@/lib/date";
+import { isISODate } from "@/lib/validation";
+import { cn } from "@/lib/utils";
+import { getCurrentProfile, listHistoryDays, type HistoryDay } from "@/server/data";
 
 export const metadata = { title: "History" };
 
-export default async function HistoryPage() {
-  const days = await listHistoryDays();
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ before?: string | string[] }>;
+}) {
+  const rawBefore = (await searchParams).before;
+  const before = typeof rawBefore === "string" && isISODate(rawBefore) ? rawBefore : undefined;
+  const [history, profile] = await Promise.all([listHistoryDays(before), getCurrentProfile()]);
+  const { days, nextCursor } = history;
+  const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
+  const weeks = groupByWeek(days, profile?.weekStartsOn ?? 1);
 
   return (
     <>
@@ -26,17 +43,50 @@ export default async function HistoryPage() {
             description="Once you start recording, your days appear here in reverse chronological order - behaviors, check-ins, tags, and notes, all editable."
           />
         ) : (
-          <ul className="space-y-3">
-            {days.map((day) => (
-              <li key={day.date}>
-                <HistoryDayCard day={day} />
-              </li>
+          <div className="space-y-6">
+            {weeks.map((week) => (
+              <section key={week.start} aria-labelledby={`week-${week.start}`}>
+                <h2
+                  id={`week-${week.start}`}
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Week of {formatDayFull(week.start)}
+                </h2>
+                <ul className="space-y-3">
+                  {week.days.map((day) => (
+                    <li key={day.date}>
+                      <HistoryDayCard day={day} timeZone={timeZone} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
+        {nextCursor ? (
+          <div className="mt-6 flex justify-center">
+            <Link
+              href={`/history?before=${encodeURIComponent(nextCursor)}`}
+              className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+            >
+              Older days
+            </Link>
+          </div>
+        ) : null}
       </div>
     </>
   );
+}
+
+function groupByWeek(days: HistoryDay[], weekStartsOn: number) {
+  const groups: Array<{ start: string; days: HistoryDay[] }> = [];
+  for (const day of days) {
+    const start = startOfWeekISO(day.date, weekStartsOn);
+    const current = groups.at(-1);
+    if (current?.start === start) current.days.push(day);
+    else groups.push({ start, days: [day] });
+  }
+  return groups;
 }
 
 function countsLine(day: HistoryDay): string {
@@ -54,8 +104,8 @@ function countsLine(day: HistoryDay): string {
   return parts.join(" · ");
 }
 
-function HistoryDayCard({ day }: { day: HistoryDay }) {
-  const relative = relativeDayLabel(day.date);
+function HistoryDayCard({ day, timeZone }: { day: HistoryDay; timeZone: string }) {
+  const relative = relativeDayLabel(day.date, timeZone);
 
   return (
     <Link

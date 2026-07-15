@@ -14,11 +14,12 @@ const CONFLICT_TARGET = [
 
 async function assertOwnsBehavior(userId: string, behaviorId: string) {
   const [row] = await db
-    .select({ id: behaviors.id })
+    .select({ id: behaviors.id, inputType: behaviors.inputType })
     .from(behaviors)
     .where(and(eq(behaviors.id, behaviorId), eq(behaviors.userId, userId)))
     .limit(1);
   if (!row) throw new Error("NOT_FOUND");
+  return row;
 }
 
 /** The current daily entries for the user on a given date, keyed by behavior id. */
@@ -47,7 +48,8 @@ export async function setBehaviorBoolean(
   entryDate: string,
 ) {
   const userId = await requireUserId();
-  await assertOwnsBehavior(userId, behaviorId);
+  const behavior = await assertOwnsBehavior(userId, behaviorId);
+  if (behavior.inputType !== "boolean") throw new Error("INVALID_VALUE_TYPE");
   await db
     .insert(dailyBehaviorEntries)
     .values({ userId, behaviorId, entryDate, booleanValue: value, numericValue: null })
@@ -64,7 +66,8 @@ export async function setBehaviorNumeric(
   entryDate: string,
 ) {
   const userId = await requireUserId();
-  await assertOwnsBehavior(userId, behaviorId);
+  const behavior = await assertOwnsBehavior(userId, behaviorId);
+  if (behavior.inputType !== "numeric") throw new Error("INVALID_VALUE_TYPE");
   await db
     .insert(dailyBehaviorEntries)
     .values({ userId, behaviorId, entryDate, numericValue: value, booleanValue: null })

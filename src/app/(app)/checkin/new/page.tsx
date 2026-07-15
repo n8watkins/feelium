@@ -2,8 +2,10 @@ import { PageHeader } from "@/components/page-header";
 import { BehaviorLogRow } from "@/components/tracking/behavior-log-row";
 import { CheckInForm } from "@/components/tracking/check-in-form";
 import { Separator } from "@/components/ui/separator";
+import { DEFAULT_TIME_ZONE, todayISO } from "@/lib/date";
 import {
   getEntriesForDate,
+  getCurrentProfile,
   listActiveBehaviors,
   listActiveOutcomeMetrics,
   listTags,
@@ -12,7 +14,8 @@ import {
 export const metadata = { title: "New check-in" };
 
 export default async function NewCheckInPage() {
-  const localDate = new Date().toLocaleDateString("en-CA");
+  const profile = await getCurrentProfile();
+  const localDate = todayISO(profile?.timezone ?? DEFAULT_TIME_ZONE);
   const [outcomes, tags, behaviors, entries] = await Promise.all([
     listActiveOutcomeMetrics(),
     listTags(),

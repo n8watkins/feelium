@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ratingAnchors } from "@/config/tracking";
 import type { OutcomeDirection, OutcomeInputType } from "@/db/schema";
 import { cn } from "@/lib/utils";
+import { MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "@/lib/validation";
 
 type OutcomeForForm = {
   id: string;
@@ -191,6 +192,7 @@ export function CheckInForm({
               }
             }}
             placeholder="Add a tag"
+            maxLength={MAX_NAME_LENGTH}
             aria-label="Add a tag"
           />
           <Button type="button" variant="outline" onClick={addTag}>
@@ -208,6 +210,7 @@ export function CheckInForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Anything worth remembering?"
+          maxLength={MAX_NOTE_LENGTH}
         />
       </section>
 

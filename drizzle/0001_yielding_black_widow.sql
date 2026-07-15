@@ -1,0 +1,1 @@
+ALTER TABLE `reminder_setting` ADD `last_sent_local_date` text;

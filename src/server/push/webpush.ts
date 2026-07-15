@@ -16,6 +16,7 @@ const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 // Contact URI the push service can reach if there's a problem with our requests.
 const subject = process.env.VAPID_SUBJECT || "mailto:notifications@example.com";
+const PUSH_REQUEST_TIMEOUT_MS = 1_000;
 
 let configured = false;
 
@@ -57,7 +58,9 @@ export async function sendPush(
 ): Promise<SendResult> {
   ensureConfigured();
   try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
+    await webpush.sendNotification(subscription, JSON.stringify(payload), {
+      timeout: PUSH_REQUEST_TIMEOUT_MS,
+    });
     return { ok: true };
   } catch (error) {
     const statusCode = (error as { statusCode?: number }).statusCode;

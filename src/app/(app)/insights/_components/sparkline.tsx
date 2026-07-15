@@ -28,11 +28,21 @@ export function Sparkline({
         }
         const pct = Math.max(8, Math.round(((bucket.value - domainMin) / span) * 100));
         return (
-          <div key={i} className="flex flex-1 items-end">
-            <div
-              className="w-full rounded-sm bg-primary/70"
-              style={{ height: `${pct}%` }}
-            />
+          <div key={i} className="h-full flex-1">
+            <svg
+              className="h-full w-full overflow-visible"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <rect
+                x="0"
+                y={100 - pct}
+                width="100"
+                height={pct}
+                rx="4"
+                className="fill-primary/70"
+              />
+            </svg>
           </div>
         );
       })}

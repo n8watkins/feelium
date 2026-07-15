@@ -43,8 +43,8 @@ export type BehaviorDirection = "increase" | "reduce" | "neutral";
 export type OutcomeInputType = "rating" | "boolean" | "numeric";
 export type OutcomeDirection = "higher_is_better" | "lower_is_better" | "neutral";
 
-// profiles: one row per user, created app-side on first sign-in (replaces the old
-// Postgres trigger). week_starts_on: 0 = Sunday ... 6 = Saturday.
+// profiles: one row per user, created app-side on the first authenticated request
+// (replaces the old Postgres trigger). week_starts_on: 0 = Sunday ... 6 = Saturday.
 export const profiles = sqliteTable(
   "profile",
   {
@@ -53,6 +53,11 @@ export const profiles = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name"),
     timezone: text("timezone").notNull().default("UTC"),
+    // Existing profiles default to manual control during migration. Newly created profiles
+    // opt in explicitly, until the user saves a timezone preference themselves.
+    autoSyncTimezone: integer("auto_sync_timezone", { mode: "boolean" })
+      .notNull()
+      .default(false),
     weekStartsOn: integer("week_starts_on").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -246,22 +251,35 @@ export const checkInTags = sqliteTable(
   ],
 );
 
-export const reminderSettings = sqliteTable("reminder_setting", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  // One optional daily reminder per user.
-  userId: text("user_id")
-    .notNull()
-    .unique()
-    .references(() => users.id, { onDelete: "cascade" }),
-  isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
-  // Local time-of-day 'HH:MM' for the single daily reminder.
-  reminderTime: text("reminder_time"),
-  timezone: text("timezone").notNull().default("UTC"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const reminderSettings = sqliteTable(
+  "reminder_setting",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // One optional daily reminder per user.
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
+    // Local time-of-day 'HH:MM' for the single daily reminder.
+    reminderTime: text("reminder_time"),
+    timezone: text("timezone").notNull().default("UTC"),
+    // The local calendar date most recently completed by the send job.
+    lastSentLocalDate: text("last_sent_local_date"),
+    deliveryLocalDate: text("delivery_local_date"),
+    deliveryLeaseToken: text("delivery_lease_token"),
+    deliveryLeaseExpiresAt: integer("delivery_lease_expires_at", {
+      mode: "timestamp",
+    }),
+    // Persisting the next UTC occurrence lets cron read only users who might be due.
+    nextReminderAt: integer("next_reminder_at", { mode: "timestamp" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("reminder_setting_due_idx").on(t.isEnabled, t.nextReminderAt)],
+);
 
 export const pushSubscriptions = sqliteTable(
   "push_subscription",
@@ -280,6 +298,22 @@ export const pushSubscriptions = sqliteTable(
     deviceName: text("device_name"),
     createdAt: createdAt(),
     lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+    lastReminderLocalDate: text("last_reminder_local_date"),
+    lastReminderAttemptAt: integer("last_reminder_attempt_at", {
+      mode: "timestamp",
+    }),
+    reminderFailureCount: integer("reminder_failure_count").notNull().default(0),
+    reminderQuarantinedAt: integer("reminder_quarantined_at", {
+      mode: "timestamp",
+    }),
   },
-  (t) => [unique("push_subscription_unique_endpoint").on(t.userId, t.endpoint)],
+  (t) => [
+    unique("push_subscription_unique_endpoint").on(t.userId, t.endpoint),
+    index("push_subscription_reminder_delivery_idx").on(
+      t.userId,
+      t.reminderQuarantinedAt,
+      t.lastReminderLocalDate,
+      t.lastReminderAttemptAt,
+    ),
+  ],
 );

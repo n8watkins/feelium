@@ -3,11 +3,11 @@ import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 
 import authConfig from "@/auth.config";
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 
 // ---------------------------------------------------------------------------
-// TEMPORARILY DISABLED: password + magic-link sign-in (GitHub is the only way in "atm").
+// TEMPORARILY DISABLED: password + magic-link sign-in (GitHub is currently the only way in).
 //
 // Why: production only has the GitHub OAuth callback wired up, and Resend on the current
 // plan can only email the account owner, so the magic-link flow is broken for everyone
@@ -21,8 +21,8 @@ import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 // ---------------------------------------------------------------------------
 // import bcrypt from "bcryptjs";
 // import { eq } from "drizzle-orm";
+// import type { EmailConfig } from "next-auth/providers";
 // import Credentials from "next-auth/providers/credentials";
-// import Nodemailer from "next-auth/providers/nodemailer";
 // import Resend from "next-auth/providers/resend";
 
 // const isProduction = process.env.NODE_ENV === "production";
@@ -36,27 +36,31 @@ import { accounts, sessions, users, verificationTokens } from "@/db/schema";
  * The magic-link email provider, selected by environment but exposed under a single stable
  * provider id ("email") so the login action calls `signIn("email", ...)` in both:
  *   - Production: Resend sends the real email (reads AUTH_RESEND_KEY).
- *   - Development: Nodemailer with sendVerificationRequest overridden to print the sign-in
- *     URL to the server console - no SMTP or email account needed locally.
+ *   - Development: a dependency-free EmailConfig prints the sign-in URL to the server
+ *     console, so no SMTP transport or email account is needed locally.
  */
+// const developmentEmailProvider: EmailConfig = {
+//   id: "email",
+//   type: "email",
+//   name: "Email",
+//   from: EMAIL_FROM,
+//   maxAge: 24 * 60 * 60,
+//   async sendVerificationRequest({ identifier, url }) {
+//     console.log(
+//       "\n============================================================\n" +
+//         `  Magic sign-in link for ${identifier}:\n  ${url}\n` +
+//         "============================================================\n",
+//     );
+//   },
+// };
+//
 // const emailProvider = isProduction
 //   ? Resend({ id: "email", apiKey: process.env.AUTH_RESEND_KEY, from: EMAIL_FROM })
-//   : Nodemailer({
-//       id: "email",
-//       server: { host: "localhost", port: 587, auth: { user: "dev", pass: "dev" } },
-//       from: EMAIL_FROM,
-//       async sendVerificationRequest({ identifier, url }) {
-//         console.log(
-//           "\n============================================================\n" +
-//             `  Magic sign-in link for ${identifier}:\n  ${url}\n` +
-//             "============================================================\n",
-//         );
-//       },
-//     });
+//   : developmentEmailProvider;
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
   ...authConfig,
-  adapter: DrizzleAdapter(db, {
+  adapter: DrizzleAdapter(getDb(), {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
@@ -80,11 +84,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     //       typeof credentials?.email === "string" ? credentials.email : "";
     //     const password =
     //       typeof credentials?.password === "string" ? credentials.password : "";
-    //     if (!email || !password) return null;
-    //
-    //     const [user] = await db
-    //       .select()
-    //       .from(users)
+//     if (!email || !password) return null;
+//
+//     const [user] = await getDb()
+//       .select()
+//       .from(users)
     //       .where(eq(users.email, email))
     //       .limit(1);
     //
@@ -102,4 +106,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     //   },
     // }),
   ],
-});
+}));

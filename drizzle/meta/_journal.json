@@ -8,6 +8,41 @@
       "when": 1783702042767,
       "tag": "0000_small_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784062228347,
+      "tag": "0001_yielding_black_widow",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784062429566,
+      "tag": "0002_quiet_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784062872534,
+      "tag": "0003_fat_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784072472861,
+      "tag": "0004_outgoing_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784072984128,
+      "tag": "0005_lovely_shiva",
+      "breakpoints": true
     }
   ]
 }
