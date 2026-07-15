@@ -12,6 +12,7 @@ import {
   listPushSubscriptionsForReminder,
   markPushSubscriptionAttempt,
   releaseReminderDelivery,
+  renewReminderDelivery,
   scheduleNextReminder,
   type ReminderCandidate,
 } from "@/server/data";
@@ -45,6 +46,7 @@ const DEFAULT_WINDOW_MINUTES = 10;
 const MAX_CANDIDATES_PER_RUN = 100;
 const SEND_CONCURRENCY = 10;
 const MAX_SUBSCRIPTIONS_PER_USER_PER_RUN = 25;
+const SUBSCRIPTION_DISPATCH_BATCH_SIZE = 5;
 const REMINDER_DELIVERY_LEASE_MS = 2 * 60_000;
 const REMINDER_RETRY_DELAY_MS = 60_000;
 const MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION = 3;
@@ -147,6 +149,7 @@ async function handle(request: NextRequest) {
     let userFailed = 0;
     let claimToken: string | null = null;
     let hasPendingSubscriptions = true;
+    let ownsLease = true;
     try {
       claimToken = await claimReminderDelivery(
         reminder,
@@ -164,49 +167,80 @@ async function handle(request: NextRequest) {
         reminder.localDate,
         MAX_SUBSCRIPTIONS_PER_USER_PER_RUN,
       );
-      const results = await Promise.all(
-        subscriptions.map(async (subscription) => ({
-          subscription,
-          result: await sendPush(
-            subscription.subscriptionData as unknown as WebPushSubscription,
-            {
-              title: REMINDER_TITLE,
-              body: REMINDER_BODY,
-              url: REMINDER_URL,
-            },
-          ),
-        })),
-      );
-      for (const { subscription, result } of results) {
-        if (result.ok) {
-          await markPushSubscriptionAttempt(
-            subscription.id,
-            reminder.userId,
-            reminder.localDate,
-            true,
-            new Date(),
-            MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
-          );
-          userSent += 1;
-        } else if (result.gone) {
-          await deletePushSubscriptionForReminder(subscription.id, reminder.userId);
-          userPruned += 1;
-        } else {
-          await markPushSubscriptionAttempt(
-            subscription.id,
-            reminder.userId,
-            reminder.localDate,
-            false,
-            new Date(),
-            MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
-          );
-          userFailed += 1;
+      for (
+        let offset = 0;
+        offset < subscriptions.length;
+        offset += SUBSCRIPTION_DISPATCH_BATCH_SIZE
+      ) {
+        ownsLease = await renewReminderDelivery(
+          reminder.userId,
+          reminder.localDate,
+          claimToken,
+          new Date(),
+          REMINDER_DELIVERY_LEASE_MS,
+        );
+        if (!ownsLease) break;
+
+        const results = await Promise.all(
+          subscriptions
+            .slice(offset, offset + SUBSCRIPTION_DISPATCH_BATCH_SIZE)
+            .map(async (subscription) => ({
+              subscription,
+              result: await sendPush(
+                subscription.subscriptionData as unknown as WebPushSubscription,
+                {
+                  title: REMINDER_TITLE,
+                  body: REMINDER_BODY,
+                  url: REMINDER_URL,
+                },
+              ),
+            })),
+        );
+        for (const { subscription, result } of results) {
+          const mutatedAt = new Date();
+          let mutationApplied: boolean;
+          if (result.ok) {
+            mutationApplied = await markPushSubscriptionAttempt(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              true,
+              mutatedAt,
+              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
+            );
+            userSent += 1;
+          } else if (result.gone) {
+            mutationApplied = await deletePushSubscriptionForReminder(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              mutatedAt,
+            );
+            userPruned += 1;
+          } else {
+            mutationApplied = await markPushSubscriptionAttempt(
+              subscription.id,
+              reminder.userId,
+              reminder.localDate,
+              claimToken,
+              false,
+              mutatedAt,
+              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
+            );
+            userFailed += 1;
+          }
+          if (!mutationApplied) ownsLease = false;
         }
+        if (!ownsLease) break;
       }
-      hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
-        reminder.userId,
-        reminder.localDate,
-      );
+      if (ownsLease) {
+        hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
+          reminder.userId,
+          reminder.localDate,
+        );
+      }
     } catch {
       userFailed += 1;
     }
@@ -214,23 +248,28 @@ async function handle(request: NextRequest) {
     sent += userSent;
     pruned += userPruned;
     failed += userFailed;
-    if (!claimToken) return;
+    if (!claimToken || !ownsLease) return;
     try {
+      const finalizedAt = new Date();
+      let finalized: boolean;
       if (hasPendingSubscriptions) {
-        await releaseReminderDelivery(
+        finalized = await releaseReminderDelivery(
           reminder.userId,
           reminder.localDate,
           claimToken,
-          new Date(Date.now() + REMINDER_RETRY_DELAY_MS),
+          finalizedAt,
+          new Date(finalizedAt.getTime() + REMINDER_RETRY_DELAY_MS),
         );
       } else {
-        await completeReminderDelivery(
+        finalized = await completeReminderDelivery(
           reminder.userId,
           reminder.localDate,
           claimToken,
+          finalizedAt,
           reminder.nextAt,
         );
       }
+      if (!finalized) failed += 1;
     } catch {
       failed += 1;
     }

@@ -18,6 +18,7 @@ import {
   listPendingReminderSubscriptions,
   recordReminderSubscriptionAttempt,
   releaseReminderDeliveryLease,
+  renewReminderDeliveryLease,
 } from "@/server/data/reminder-delivery-operations";
 
 async function createTestDatabase() {
@@ -66,6 +67,35 @@ async function createTestDatabase() {
     );
   `);
   return { client, database: drizzle({ client, schema }) };
+}
+
+async function claimTestReminder(
+  client: Awaited<ReturnType<typeof createTestDatabase>>["client"],
+  database: Awaited<ReturnType<typeof createTestDatabase>>["database"],
+  userId: string,
+): Promise<string> {
+  await client.execute({
+    sql: `insert into reminder_setting (
+      id, user_id, is_enabled, reminder_time, timezone, next_reminder_at,
+      created_at, updated_at
+    ) values (?, ?, 1, '09:00', 'UTC', 1, 1, 1)`,
+    args: [`reminder-${userId}`, userId],
+  });
+  const token = await claimReminderDeliveryLease(
+    database,
+    {
+      userId,
+      reminderTime: "09:00",
+      timezone: "UTC",
+      nextReminderAt: new Date(1000),
+      deliveryLocalDate: null,
+    },
+    "2026-07-14",
+    new Date(1000),
+    10_000,
+  );
+  assert.ok(token);
+  return token;
 }
 
 test("new profiles expose explicit timezone sync state on the first request", async () => {
@@ -187,6 +217,7 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
         "lease-user",
         "2026-07-14",
         firstToken,
+        new Date(2000),
         new Date(10_000),
       ),
       false,
@@ -197,6 +228,7 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
         "lease-user",
         "2026-07-14",
         secondToken,
+        new Date(2500),
         new Date(4000),
       ),
       true,
@@ -206,10 +238,174 @@ test("expired reminder leases are reclaimable and stale owners cannot complete",
   }
 });
 
+test("reclaimed reminder leases fence stale dispatch progress and finalization", async () => {
+  const { client, database } = await createTestDatabase();
+  try {
+    await client.execute("insert into user (id, email) values ('fenced-user', 'fenced@example.test')");
+    await client.execute(`
+      insert into reminder_setting (
+        id, user_id, is_enabled, reminder_time, timezone, next_reminder_at,
+        created_at, updated_at
+      ) values (
+        'fenced-reminder', 'fenced-user', 1, '09:00', 'UTC', 1, 1, 1
+      )
+    `);
+    for (const id of ["progress", "retry", "gone"]) {
+      await client.execute({
+        sql: `insert into push_subscription
+          (id, user_id, endpoint, subscription_data, created_at)
+          values (?, 'fenced-user', ?, '{}', 1)`,
+        args: [id, `https://push.example/${id}`],
+      });
+    }
+    const reminder = {
+      userId: "fenced-user",
+      reminderTime: "09:00",
+      timezone: "UTC",
+      nextReminderAt: new Date(1000),
+      deliveryLocalDate: null,
+    };
+    const staleToken = await claimReminderDeliveryLease(
+      database,
+      reminder,
+      "2026-07-14",
+      new Date(1000),
+      2000,
+    );
+    assert.ok(staleToken);
+    assert.equal(
+      await renewReminderDeliveryLease(
+        database,
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        new Date(2000),
+        2000,
+      ),
+      true,
+    );
+    assert.equal(
+      await claimReminderDeliveryLease(
+        database,
+        { ...reminder, nextReminderAt: new Date(4000), deliveryLocalDate: "2026-07-14" },
+        "2026-07-14",
+        new Date(3000),
+        2000,
+      ),
+      null,
+    );
+
+    const activeToken = await claimReminderDeliveryLease(
+      database,
+      { ...reminder, nextReminderAt: new Date(4000), deliveryLocalDate: "2026-07-14" },
+      "2026-07-14",
+      new Date(4000),
+      2000,
+    );
+    assert.ok(activeToken);
+    assert.notEqual(activeToken, staleToken);
+    assert.equal(
+      await renewReminderDeliveryLease(
+        database,
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        new Date(5000),
+        2000,
+      ),
+      false,
+    );
+    assert.equal(
+      await recordReminderSubscriptionAttempt(
+        database,
+        "progress",
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        true,
+        new Date(5000),
+        1,
+      ),
+      false,
+    );
+    assert.equal(
+      await recordReminderSubscriptionAttempt(
+        database,
+        "retry",
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        false,
+        new Date(5000),
+        1,
+      ),
+      false,
+    );
+    assert.equal(
+      await deleteReminderSubscription(
+        database,
+        "gone",
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        new Date(5000),
+      ),
+      false,
+    );
+    assert.equal(
+      await releaseReminderDeliveryLease(
+        database,
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        new Date(5000),
+        new Date(7000),
+      ),
+      false,
+    );
+    assert.equal(
+      await completeReminderDeliveryLease(
+        database,
+        "fenced-user",
+        "2026-07-14",
+        staleToken,
+        new Date(5000),
+        new Date(10_000),
+      ),
+      false,
+    );
+
+    const staleResults = await client.execute(
+      `select id, last_reminder_local_date, reminder_failure_count, reminder_quarantined_at
+       from push_subscription order by id`,
+    );
+    assert.deepEqual(
+      staleResults.rows.map((row) => ({
+        id: row.id,
+        localDate: row.last_reminder_local_date,
+        failures: Number(row.reminder_failure_count),
+        quarantinedAt: row.reminder_quarantined_at,
+      })),
+      [
+        { id: "gone", localDate: null, failures: 0, quarantinedAt: null },
+        { id: "progress", localDate: null, failures: 0, quarantinedAt: null },
+        { id: "retry", localDate: null, failures: 0, quarantinedAt: null },
+      ],
+    );
+    const lease = await client.execute(
+      "select delivery_lease_token from reminder_setting where user_id = 'fenced-user'",
+    );
+    assert.equal(lease.rows[0]?.delivery_lease_token, activeToken);
+  } finally {
+    client.close();
+  }
+});
+
 test("partial reminder delivery retries failed devices after successes and pruning", async () => {
   const { client, database } = await createTestDatabase();
   try {
     await client.execute("insert into user (id, email) values ('push-user', 'push@example.test')");
+    const token = await claimTestReminder(client, database, "push-user");
     for (const id of ["delivered", "expired", "transient"]) {
       await client.execute({
         sql: `insert into push_subscription
@@ -224,16 +420,25 @@ test("partial reminder delivery retries failed devices after successes and pruni
       "delivered",
       "push-user",
       "2026-07-14",
+      token,
       true,
       new Date(1000),
       3,
     );
-    await deleteReminderSubscription(database, "expired", "push-user");
+    await deleteReminderSubscription(
+      database,
+      "expired",
+      "push-user",
+      "2026-07-14",
+      token,
+      new Date(1000),
+    );
     await recordReminderSubscriptionAttempt(
       database,
       "transient",
       "push-user",
       "2026-07-14",
+      token,
       false,
       new Date(1000),
       3,
@@ -254,6 +459,7 @@ test("partial reminder delivery retries failed devices after successes and pruni
       "transient",
       "push-user",
       "2026-07-14",
+      token,
       true,
       new Date(2000),
       3,
@@ -276,6 +482,7 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
   const { client, database } = await createTestDatabase();
   try {
     await client.execute("insert into user (id, email) values ('many-user', 'many@example.test')");
+    const token = await claimTestReminder(client, database, "many-user");
     for (let index = 0; index < 30; index += 1) {
       await client.execute({
         sql: `insert into push_subscription
@@ -298,6 +505,7 @@ test("bounded reminder pages resume with subscriptions not yet attempted", async
         subscription.id,
         "many-user",
         "2026-07-14",
+        token,
         false,
         new Date(1000),
         3,
@@ -328,6 +536,7 @@ test("permanently failing reminder subscriptions are quarantined after three att
   const { client, database } = await createTestDatabase();
   try {
     await client.execute("insert into user (id, email) values ('failed-user', 'failed@example.test')");
+    const token = await claimTestReminder(client, database, "failed-user");
     await client.execute(`
       insert into push_subscription
         (id, user_id, endpoint, subscription_data, created_at)
@@ -341,6 +550,7 @@ test("permanently failing reminder subscriptions are quarantined after three att
         "failed-subscription",
         "failed-user",
         "2026-07-14",
+        token,
         false,
         new Date(attempt * 1000),
         3,
@@ -356,6 +566,7 @@ test("permanently failing reminder subscriptions are quarantined after three att
       "failed-subscription",
       "failed-user",
       "2026-07-14",
+      token,
       false,
       new Date(3000),
       3,

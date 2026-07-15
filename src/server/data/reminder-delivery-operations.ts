@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { pushSubscriptions, reminderSettings } from "@/db/schema";
 import {
@@ -7,6 +7,28 @@ import {
 } from "./reminder-operations";
 
 type AppDatabase = (typeof import("@/db"))["db"];
+
+function activeReminderDeliveryLease(
+  database: AppDatabase,
+  userId: string,
+  localDate: string,
+  token: string,
+  now: Date,
+) {
+  return exists(
+    database
+      .select({ id: reminderSettings.id })
+      .from(reminderSettings)
+      .where(
+        and(
+          eq(reminderSettings.userId, userId),
+          eq(reminderSettings.deliveryLocalDate, localDate),
+          eq(reminderSettings.deliveryLeaseToken, token),
+          gt(reminderSettings.deliveryLeaseExpiresAt, now),
+        ),
+      ),
+  );
+}
 
 export async function claimReminderDeliveryLease(
   database: AppDatabase,
@@ -43,11 +65,40 @@ export async function claimReminderDeliveryLease(
   return rows.length === 1 ? token : null;
 }
 
+export async function renewReminderDeliveryLease(
+  database: AppDatabase,
+  userId: string,
+  localDate: string,
+  token: string,
+  now: Date,
+  leaseDurationMs: number,
+): Promise<boolean> {
+  const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
+  const rows = await database
+    .update(reminderSettings)
+    .set({
+      deliveryLeaseExpiresAt: leaseExpiresAt,
+      nextReminderAt: leaseExpiresAt,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(reminderSettings.userId, userId),
+        eq(reminderSettings.deliveryLocalDate, localDate),
+        eq(reminderSettings.deliveryLeaseToken, token),
+        gt(reminderSettings.deliveryLeaseExpiresAt, now),
+      ),
+    )
+    .returning({ id: reminderSettings.id });
+  return rows.length === 1;
+}
+
 export async function releaseReminderDeliveryLease(
   database: AppDatabase,
   userId: string,
   localDate: string,
   token: string,
+  now: Date,
   retryAt: Date,
 ): Promise<boolean> {
   const rows = await database
@@ -56,13 +107,14 @@ export async function releaseReminderDeliveryLease(
       deliveryLeaseToken: null,
       deliveryLeaseExpiresAt: null,
       nextReminderAt: retryAt,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(
       and(
         eq(reminderSettings.userId, userId),
         eq(reminderSettings.deliveryLocalDate, localDate),
         eq(reminderSettings.deliveryLeaseToken, token),
+        gt(reminderSettings.deliveryLeaseExpiresAt, now),
       ),
     )
     .returning({ id: reminderSettings.id });
@@ -74,6 +126,7 @@ export async function completeReminderDeliveryLease(
   userId: string,
   localDate: string,
   token: string,
+  now: Date,
   nextAt: Date,
 ): Promise<boolean> {
   const rows = await database
@@ -84,13 +137,14 @@ export async function completeReminderDeliveryLease(
       deliveryLeaseToken: null,
       deliveryLeaseExpiresAt: null,
       nextReminderAt: nextAt,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(
       and(
         eq(reminderSettings.userId, userId),
         eq(reminderSettings.deliveryLocalDate, localDate),
         eq(reminderSettings.deliveryLeaseToken, token),
+        gt(reminderSettings.deliveryLeaseExpiresAt, now),
       ),
     )
     .returning({ id: reminderSettings.id });
@@ -150,12 +204,13 @@ export async function recordReminderSubscriptionAttempt(
   subscriptionId: string,
   userId: string,
   localDate: string,
+  token: string,
   delivered: boolean,
   attemptedAt: Date,
   maxFailures: number,
-): Promise<void> {
+): Promise<boolean> {
   const quarantineTimestamp = Math.floor(attemptedAt.getTime() / 1000);
-  await database
+  const rows = await database
     .update(pushSubscriptions)
     .set({
       lastReminderLocalDate: delivered ? localDate : undefined,
@@ -175,21 +230,30 @@ export async function recordReminderSubscriptionAttempt(
       and(
         eq(pushSubscriptions.id, subscriptionId),
         eq(pushSubscriptions.userId, userId),
+        activeReminderDeliveryLease(database, userId, localDate, token, attemptedAt),
       ),
-    );
+    )
+    .returning({ id: pushSubscriptions.id });
+  return rows.length === 1;
 }
 
 export async function deleteReminderSubscription(
   database: AppDatabase,
   subscriptionId: string,
   userId: string,
-): Promise<void> {
-  await database
+  localDate: string,
+  token: string,
+  deletedAt: Date,
+): Promise<boolean> {
+  const rows = await database
     .delete(pushSubscriptions)
     .where(
       and(
         eq(pushSubscriptions.id, subscriptionId),
         eq(pushSubscriptions.userId, userId),
+        activeReminderDeliveryLease(database, userId, localDate, token, deletedAt),
       ),
-    );
+    )
+    .returning({ id: pushSubscriptions.id });
+  return rows.length === 1;
 }

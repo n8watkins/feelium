@@ -18,6 +18,7 @@ import {
   listPendingReminderSubscriptions,
   recordReminderSubscriptionAttempt,
   releaseReminderDeliveryLease,
+  renewReminderDeliveryLease,
 } from "./reminder-delivery-operations";
 import { requireUserId } from "./session";
 
@@ -237,9 +238,20 @@ export async function releaseReminderDelivery(
   userId: string,
   localDate: string,
   token: string,
+  now: Date,
   retryAt: Date,
 ): Promise<boolean> {
-  return releaseReminderDeliveryLease(db, userId, localDate, token, retryAt);
+  return releaseReminderDeliveryLease(db, userId, localDate, token, now, retryAt);
+}
+
+export async function renewReminderDelivery(
+  userId: string,
+  localDate: string,
+  token: string,
+  now: Date,
+  leaseDurationMs: number,
+): Promise<boolean> {
+  return renewReminderDeliveryLease(db, userId, localDate, token, now, leaseDurationMs);
 }
 
 /** Marks the claimed local date complete and advances its persisted UTC schedule. */
@@ -247,9 +259,10 @@ export async function completeReminderDelivery(
   userId: string,
   localDate: string,
   token: string,
+  now: Date,
   nextAt: Date,
 ): Promise<boolean> {
-  return completeReminderDeliveryLease(db, userId, localDate, token, nextAt);
+  return completeReminderDeliveryLease(db, userId, localDate, token, now, nextAt);
 }
 
 export async function listPushSubscriptionsForReminder(
@@ -271,15 +284,17 @@ export async function markPushSubscriptionAttempt(
   subscriptionId: string,
   userId: string,
   localDate: string,
+  token: string,
   delivered: boolean,
   attemptedAt: Date,
   maxFailures: number,
-): Promise<void> {
-  await recordReminderSubscriptionAttempt(
+): Promise<boolean> {
+  return recordReminderSubscriptionAttempt(
     db,
     subscriptionId,
     userId,
     localDate,
+    token,
     delivered,
     attemptedAt,
     maxFailures,
@@ -289,6 +304,9 @@ export async function markPushSubscriptionAttempt(
 export async function deletePushSubscriptionForReminder(
   subscriptionId: string,
   userId: string,
-): Promise<void> {
-  await deleteReminderSubscription(db, subscriptionId, userId);
+  localDate: string,
+  token: string,
+  deletedAt: Date,
+): Promise<boolean> {
+  return deleteReminderSubscription(db, subscriptionId, userId, localDate, token, deletedAt);
 }
