@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { BehaviorForm } from "@/components/tracking/behavior-form";
-import { behaviorHasEntries, getBehavior } from "@/server/data";
+import { behaviorHasEntries, getBehavior, listBehaviorCategories } from "@/server/data";
 import { updateBehaviorAction } from "../actions";
 
 export const metadata = { title: "Edit behavior" };
@@ -16,7 +16,10 @@ export default async function EditBehaviorPage({
   const behavior = await getBehavior(id);
   if (!behavior) notFound();
 
-  const lockInputType = await behaviorHasEntries(id);
+  const [lockInputType, categories] = await Promise.all([
+    behaviorHasEntries(id),
+    listBehaviorCategories(),
+  ]);
 
   return (
     <>
@@ -31,7 +34,9 @@ export default async function EditBehaviorPage({
           submitLabel="Save changes"
           behaviorId={behavior.id}
           lockInputType={lockInputType}
+          categories={categories}
           defaults={{
+            categoryId: behavior.categoryId ?? undefined,
             name: behavior.name,
             inputType: behavior.inputType,
             desiredDirection: behavior.desiredDirection,

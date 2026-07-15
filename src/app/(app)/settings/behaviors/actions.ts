@@ -103,7 +103,17 @@ export async function createBehaviorAction(
   const parsed = parseBehavior(formData);
   if (!parsed.ok) return { errors: parsed.errors, values: parsed.values };
 
-  await createBehavior(parsed.input);
+  try {
+    await createBehavior(parsed.input);
+  } catch (error) {
+    if (error instanceof Error && error.message === "CATEGORY_NOT_FOUND") {
+      return {
+        errors: { categoryId: "That category no longer exists." },
+        values: parsed.values,
+      };
+    }
+    throw error;
+  }
   revalidatePath(LIST_PATH);
   // Return to wherever this was launched from (e.g. Today), defaulting to the list.
   const destination = safeRedirectPath(
@@ -131,6 +141,12 @@ export async function updateBehaviorAction(
           inputType:
             "Input type can't change after entries exist. Archive this behavior and create a new one.",
         },
+        values: parsed.values,
+      };
+    }
+    if (error instanceof Error && error.message === "CATEGORY_NOT_FOUND") {
+      return {
+        errors: { categoryId: "That category no longer exists." },
         values: parsed.values,
       };
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 
 import type { BehaviorFormState } from "@/app/(app)/settings/behaviors/actions";
 import {
@@ -9,6 +10,7 @@ import {
   behaviorInputTypeLabel,
 } from "@/config/tracking";
 import type { BehaviorInputType } from "@/db/schema";
+import type { BehaviorCategoryColor } from "@/config/behavior-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,7 @@ import {
 } from "@/lib/validation";
 
 export type BehaviorFormDefaults = {
+  categoryId?: string;
   name?: string;
   inputType?: BehaviorInputType;
   desiredDirection?: string;
@@ -36,6 +39,7 @@ export function BehaviorForm({
   defaults,
   lockInputType = false,
   returnTo,
+  categories,
 }: {
   action: (
     prev: BehaviorFormState,
@@ -47,6 +51,7 @@ export function BehaviorForm({
   lockInputType?: boolean;
   // Where to go after a successful save (e.g. back to Today when added from there).
   returnTo?: string;
+  categories: { id: string; name: string; color: BehaviorCategoryColor }[];
 }) {
   const [state, formAction, isPending] = useActionState<BehaviorFormState, FormData>(
     action,
@@ -86,6 +91,35 @@ export function BehaviorForm({
         {errors.name ? (
           <p id="name-error" className="text-sm text-destructive">
             {errors.name}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="categoryId">Category</Label>
+          <Button asChild variant="link" size="sm" className="h-auto px-0">
+            <Link href="/settings/behaviors/categories">Manage categories</Link>
+          </Button>
+        </div>
+        <select
+          id="categoryId"
+          name="categoryId"
+          defaultValue={state.values?.categoryId ?? defaults?.categoryId ?? ""}
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          aria-invalid={Boolean(errors.categoryId)}
+          aria-describedby={errors.categoryId ? "category-error" : undefined}
+        >
+          <option value="">Uncategorized</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+        {errors.categoryId ? (
+          <p id="category-error" className="text-sm text-destructive">
+            {errors.categoryId}
           </p>
         ) : null}
       </div>
