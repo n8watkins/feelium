@@ -11,7 +11,7 @@
  * stale or wrong-user view. Only same-origin static assets are cached.
  */
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2"; // v2: the three-tone logo replaced the bar-chart icons
 const CACHE_NAME = `bt-static-${CACHE_VERSION}`;
 
 // Small, stable app-shell assets worth precaching. Hashed /_next/static/* chunks are

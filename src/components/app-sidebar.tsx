@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { BrandMark } from "@/components/brand-mark";
 import { branding } from "@/config/branding";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -16,9 +17,13 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
-      <div className="flex h-16 items-center px-6 text-lg font-semibold text-sidebar-foreground">
+      <Link
+        href="/today"
+        className="flex h-16 items-center gap-2.5 px-6 text-lg font-semibold text-sidebar-foreground"
+      >
+        <BrandMark className="h-5" />
         {branding.appName}
-      </div>
+      </Link>
       <nav aria-label="Primary" className="flex-1 px-3 py-2">
         <ul className="flex flex-col gap-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

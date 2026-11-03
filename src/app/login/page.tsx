@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import { branding } from "@/config/branding";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ export default async function LoginPage({
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-2 text-center">
+          <BrandMark className="mx-auto mb-3 h-10" />
           <h1 className="text-2xl font-semibold tracking-tight">
             {branding.appName}
           </h1>

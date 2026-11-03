@@ -8,6 +8,7 @@
     "build:worker": "opennextjs-cloudflare build",
     "preview:worker": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy:worker": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "icons": "node scripts/generate-pwa-icons.mjs",
     "cf-typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv --strict-vars=false --env-file .dev.vars.example",
     "start": "next start",
     "lint": "eslint",
