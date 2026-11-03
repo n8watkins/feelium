@@ -10,7 +10,12 @@ import { SavedCheckInToast } from "@/components/tracking/saved-check-in-toast";
 import { Button } from "@/components/ui/button";
 import { BEHAVIOR_CATEGORY_COLOR_STYLES } from "@/config/behavior-categories";
 import { formatOutcomeValue } from "@/config/tracking";
-import { dateISOInTimeZone, DEFAULT_TIME_ZONE } from "@/lib/date";
+import {
+  checkInsTodayLabel,
+  dateISOInTimeZone,
+  DEFAULT_TIME_ZONE,
+  formatCheckInMoment,
+} from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
   countCheckInsForDate,
@@ -73,6 +78,8 @@ export default async function TodayPage({
     behaviorGroups.push({ category: null, behaviors: uncategorized });
   }
 
+  const hasCategories = behaviorGroups.some((group) => group.category);
+
   return (
     <>
       {checkin === "saved" ? <SavedCheckInToast /> : null}
@@ -114,15 +121,18 @@ export default async function TodayPage({
                     key={group.category?.id ?? "uncategorized"}
                     aria-labelledby={`behavior-group-${group.category?.id ?? "uncategorized"}`}
                     className={cn(
-                      "space-y-2 border-l-2 pl-3",
-                      group.category
-                        ? BEHAVIOR_CATEGORY_COLOR_STYLES[group.category.color]
-                            .accent
-                        : "border-border",
+                      "space-y-2",
+                      // Without any categories there is nothing to group: no rail, no label.
+                      !hasCategories
+                        ? ""
+                        : group.category
+                          ? cn("border-l-2 pl-3", BEHAVIOR_CATEGORY_COLOR_STYLES[group.category.color].accent)
+                          : "border-l-2 border-border pl-3",
                     )}
                   >
                     <h3
                       id={`behavior-group-${group.category?.id ?? "uncategorized"}`}
+                      className={hasCategories ? undefined : "sr-only"}
                     >
                       {group.category ? (
                         <CategoryBadge
@@ -182,13 +192,9 @@ export default async function TodayPage({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {latest.checkIn.occurredAt.toLocaleTimeString(undefined, {
-                    timeZone,
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                  {formatCheckInMoment(latest.checkIn.localDate, latest.checkIn.occurredAt, timeZone)}
                   {" · "}
-                  {checkInsToday} today
+                  {checkInsTodayLabel(checkInsToday)}
                 </span>
                 <ChevronRight
                   className="size-4 text-muted-foreground"

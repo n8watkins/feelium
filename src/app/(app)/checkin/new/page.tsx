@@ -47,9 +47,11 @@ export default async function NewCheckInPage() {
                 id="quick-behaviors"
                 className="text-sm font-medium text-muted-foreground"
               >
-                Update today&apos;s behaviors{" "}
-                <span className="font-normal">(optional)</span>
+                Today&apos;s behaviors
               </h2>
+              <p className="text-sm text-muted-foreground">
+                Saved as you tap, separately from the check-in above.
+              </p>
               <ul className="space-y-2">
                 {behaviors.map((behavior) => {
                   const entry = entries.get(behavior.id);

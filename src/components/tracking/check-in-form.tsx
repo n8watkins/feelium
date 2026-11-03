@@ -3,7 +3,6 @@
 import { Check, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 
 import {
   createCheckInAction,
@@ -67,6 +66,7 @@ export function CheckInForm({
   const [tagDraft, setTagDraft] = useState("");
   const [note, setNote] = useState(initialNote);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function patch(id: string, next: Partial<Answer>) {
     setAnswers((prev) => ({ ...prev, [id]: { ...prev[id], ...next } }));
@@ -107,11 +107,12 @@ export function CheckInForm({
       tagIds: selectedTagIds,
       newTagNames,
     };
+    setError(null);
     startTransition(async () => {
       const result = checkInId
         ? await updateCheckInAction(checkInId, payload, returnTo)
         : await createCheckInAction(payload);
-      if (result && !result.ok) toast.error(result.error);
+      if (result && !result.ok) setError(result.error);
     });
   }
 
@@ -214,6 +215,11 @@ export function CheckInForm({
         />
       </section>
 
+      {error ? (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
       <Button type="submit" size="lg" className="h-12 w-full" disabled={isPending}>
         {isPending ? "Saving…" : checkInId ? "Save changes" : "Save check-in"}
       </Button>

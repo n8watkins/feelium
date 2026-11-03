@@ -120,7 +120,7 @@ export function NotificationSettings({
           <CardTitle>Reminder times</CardTitle>
           <CardDescription>
             Add as many daily check-in reminders as you need. Times use{" "}
-            {timezone}.
+            {timezone.replaceAll("_", " ")}.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

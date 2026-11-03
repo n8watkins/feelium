@@ -140,7 +140,7 @@ function HistoryDayCard({ day, timeZone }: { day: HistoryDay; timeZone: string }
               variant="secondary"
               className="gap-1 font-normal tabular-nums"
             >
-              <span className="text-muted-foreground">{outcome.name}</span>
+              <span className="text-foreground/75">{outcome.name}</span>
               <span className="font-medium">{outcome.value}</span>
             </Badge>
           ))}

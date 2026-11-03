@@ -65,7 +65,8 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <Toaster />
+          {/* Above the phone tab bar (h-16 plus the safe area), so toasts never cover it. */}
+          <Toaster mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }} />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
       </body>
