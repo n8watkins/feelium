@@ -23,9 +23,9 @@ Design principles that show up throughout the code:
 
 **All seven PRD phases are shipped, and the app is live in production.**
 
-- **Live URL:** <https://feelium-sandy.vercel.app>
-- **Repo:** `n8watkins/feelium` on GitHub (public), Git-connected to Vercel.
-- **Deploy:** pushing to `main` auto-builds and deploys on Vercel. There is no manual deploy step.
+- **Live URL:** <https://feelium.n8builds.dev>
+- **Repo:** `n8watkins/feelium` on GitHub (public).
+- **Deploy:** the `Deploy` workflow deploys `main` to the Cloudflare Worker after CI passes (once the `CLOUDFLARE_API_TOKEN` repository secret exists); `npm run deploy:worker` deploys by hand.
 - Phases: 1 Foundation, 2 Tracking Setup, 3 Daily Tracking, 4 History, 5 Analytics, 6 Notifications/PWA, 7 Privacy & Release Polish - all complete.
 
 ---
@@ -38,7 +38,7 @@ Design principles that show up throughout the code:
 - **Tailwind CSS v4** + **shadcn/ui** (Radix primitives, Lucide icons), **next-themes** for light/dark/system.
 - **Turso libSQL** (SQLite-compatible) via `@libsql/client`, with **Drizzle ORM**. Local dev uses a plain SQLite file; production uses cloud Turso over HTTP.
 - **Auth.js / NextAuth v5** (currently the `5.0.0-beta.31` line) with the Drizzle adapter and a **JWT session strategy**.
-- **Vercel** hosting with Git-connected auto-deploy.
+- **Cloudflare Workers** hosting through OpenNext (`wrangler.jsonc`).
 
 ### Architecture map
 
@@ -118,7 +118,7 @@ Full setup is in `README.md`; the short version:
 
 - **Local:** `npm install`, copy `.env.local.example` to `.env.local`, set `AUTH_SECRET` (`npx auth secret`) and GitHub OAuth credentials, `npm run db:migrate`, `npm run dev`. Optionally `npm run db:seed` for demo tracking data.
 - **Sign-in is GitHub-only** right now, locally and in production, so you need a GitHub OAuth app (callback `http://localhost:3000/api/auth/callback/github`) even for local dev.
-- **Deploy:** push to `main` and Vercel auto-deploys. Production reads Turso via `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`; those take precedence over the local `DATABASE_URL` file.
+- **Deploy:** merge to `main`; the `Deploy` workflow ships it to the Worker. Production reads Turso via `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`; those take precedence over the local `DATABASE_URL` file.
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
