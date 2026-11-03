@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // feelium on Cloudflare Workers: the Next.js app built with OpenNext
+  // (`npm run build:worker`), plus the reminder Cron Trigger in worker/handlers.ts.
+  "name": "feelium",
+  "account_id": "b2c564cf83cb9184dd6d7cc4ff8b38bf",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  // nodejs_compat is required by @opennextjs/cloudflare, and web-push uses node:crypto and node:https.
+  "compatibility_flags": ["nodejs_compat"],
+  // No custom domain yet: the app is served at feelium.<account>.workers.dev
+  // until the owner picks one (see README "Hosting on Cloudflare Workers").
+  "workers_dev": true,
+  // Version preview URLs would run with this Worker's secrets, so a preview would
+  // read and write the production database. Keep them off.
+  "preview_urls": false,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Every five minutes, offset by two, as the GitHub Actions schedule ran:
+  // /api/notifications/send pushes the reminders that are due.
+  "triggers": {
+    "crons": ["2-57/5 * * * *"]
+  },
+  "vars": {
+    // src/lib/app-env.ts: a deployment fails closed without Turso.
+    "APP_ENV": "production",
+    "VAPID_SUBJECT": "mailto:nathancwatkins23@gmail.com"
+  }
+  // Secrets are set with `wrangler secret put <NAME>`, never in this file.
+  // .dev.vars.example lists them (and generates their binding types); local
+  // workerd runs read real values from .dev.vars.
+}

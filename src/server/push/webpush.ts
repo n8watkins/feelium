@@ -4,32 +4,42 @@ import webpush from "web-push";
 
 /**
  * Web Push transport (PRD 17). Configures VAPID once per server process and sends
- * notifications. The public key is also exposed to the browser via
- * NEXT_PUBLIC_VAPID_PUBLIC_KEY; the private key (VAPID_PRIVATE_KEY) stays server-side.
+ * notifications. The public key (VAPID_PUBLIC_KEY) is also handed to the browser by the
+ * notification settings page; the private key (VAPID_PRIVATE_KEY) stays server-side.
+ * Both are read at runtime, so a deployment's keys are Worker secrets rather than values
+ * inlined by `next build`. NEXT_PUBLIC_VAPID_PUBLIC_KEY is still read as a fallback for
+ * the Vercel deployment, which sets that name.
  *
  * Generate keys locally with `npx web-push generate-vapid-keys` and put them in
  * .env.local (see .env.local.example). Everything degrades gracefully when the keys are
  * absent so the app still runs without push configured.
  */
 
-const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const privateKey = process.env.VAPID_PRIVATE_KEY;
-// Contact URI the push service can reach if there's a problem with our requests.
-const subject = process.env.VAPID_SUBJECT || "mailto:notifications@example.com";
 const PUSH_REQUEST_TIMEOUT_MS = 1_000;
 
 let configured = false;
 
-/** Whether the server has the VAPID key pair needed to send push messages. */
-export function isPushConfigured(): boolean {
-  return Boolean(publicKey && privateKey);
+/** The VAPID public key browsers subscribe with, or null while push is not configured. */
+export function vapidPublicKey(): string | null {
+  return process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null;
 }
 
+/** Whether the server has the VAPID key pair needed to send push messages. */
+export function isPushConfigured(): boolean {
+  return Boolean(vapidPublicKey() && process.env.VAPID_PRIVATE_KEY);
+}
+
+// Read on first use, not at import: on Cloudflare Workers the environment is bound to
+// process.env per request, after the module may already have been evaluated.
 function ensureConfigured(): void {
   if (configured) return;
+  const publicKey = vapidPublicKey();
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  // Contact URI the push service can reach if there's a problem with our requests.
+  const subject = process.env.VAPID_SUBJECT || "mailto:notifications@example.com";
   if (!publicKey || !privateKey) {
     throw new Error(
-      "Web Push is not configured: set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.",
+      "Web Push is not configured: set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.",
     );
   }
   webpush.setVapidDetails(subject, publicKey, privateKey);

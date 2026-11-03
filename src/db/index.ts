@@ -3,6 +3,8 @@ import "server-only";
 import { createClient, type Config } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
+import { appEnv, isDeployed } from "@/lib/app-env";
+
 import * as schema from "./schema";
 
 type Database = ReturnType<typeof createDatabase>;
@@ -20,11 +22,11 @@ function databaseConfig(): Config {
     return { url: tursoUrl, authToken: tursoAuthToken };
   }
 
-  // A local SQLite fallback is convenient for development, but it would be ephemeral on
-  // Vercel and could appear to accept writes before silently losing them. Fail closed there.
-  if (process.env.VERCEL === "1" || process.env.VERCEL_ENV) {
+  // A local SQLite fallback is convenient for development, but it would be ephemeral on a
+  // deployment and could appear to accept writes before silently losing them. Fail closed.
+  if (isDeployed()) {
     throw new Error(
-      "Turso is required on Vercel. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.",
+      `Turso is required in ${appEnv()}. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.`,
     );
   }
 
