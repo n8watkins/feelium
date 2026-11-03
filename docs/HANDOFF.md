@@ -118,7 +118,7 @@ Full setup is in `README.md`; the short version:
 
 - **Local:** `npm install`, copy `.env.local.example` to `.env.local`, set `AUTH_SECRET` (`npx auth secret`) and GitHub OAuth credentials, `npm run db:migrate`, `npm run dev`. Optionally `npm run db:seed` for demo tracking data.
 - **Sign-in is GitHub-only** right now, locally and in production, so you need a GitHub OAuth app (callback `http://localhost:3000/api/auth/callback/github`) even for local dev.
-- **Deploy:** merge to `main`; the `Deploy` workflow ships it to the Worker. Production reads Turso via `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`; those take precedence over the local `DATABASE_URL` file.
+- **Deploy:** merge to `main`; the `Deploy` workflow ships it to the Worker once the `CLOUDFLARE_API_TOKEN` repository secret exists, and until then `npm run deploy:worker` deploys by hand. Production reads Turso via `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`; those take precedence over the local `DATABASE_URL` file.
 - **Migrations are not run during `next build`.** When the schema changes, run `npm run db:generate` locally, commit the SQL, then apply it against Turso once: `TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run db:migrate`.
 - **Env vars** (secrets, Turso, GitHub OAuth, and the Web Push/cron set) are documented in `README.md` and `docs/notifications-and-pwa.md`.
 
@@ -185,7 +185,7 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 
 - Installable PWA (manifest from `config/branding.ts`, standalone display, raster + maskable + apple-touch icons).
 - Service worker (`public/sw.js`): stale-while-revalidate for static assets, HTML never cached (auth pages stay fresh), Web Push handling, notification deep-link to the check-in screen.
-- A guarded send endpoint (`/api/notifications/send`) that a five-minute GitHub Actions schedule drives.
+- A guarded send endpoint (`/api/notifications/send`) that the Worker's five-minute Cron Trigger drives in-process.
   It queries a bounded due queue, uses timezone-aware and daylight-saving-safe occurrences, retries transient failures fairly, bounds stalled push requests, and prunes dead subscriptions.
   Full detail is in `docs/notifications-and-pwa.md`.
 
@@ -204,7 +204,7 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 - **Whole-number vs decimal numeric steppers.** Numeric inputs could distinguish integer-only quantities (e.g. cups) from decimals (e.g. hours) for a nicer stepper experience.
 - **Upgrade next-auth v5 from beta to the stable release** when it lands, and drop the beta pin.
 - **Complete the PWA PNG icon set.** Add any remaining resolutions/variants for full install fidelity across platforms (the generator is `scripts/generate-pwa-icons.mjs`, driven by the single SVG).
-- **Custom domain.** `feelium.vercel.app` was taken, so production currently lives at `feelium-sandy.vercel.app`; a proper domain (and matching `AUTH_URL` + GitHub callback) would be a clean upgrade.
+- **Retire the legacy Vercel deployment.** Production moved to Cloudflare Workers at `feelium.n8builds.dev`, but `feelium-sandy.vercel.app` still runs with production secrets; remove that project, then drop the `VERCEL_ENV` mapping in `src/lib/app-env.ts` and the `NEXT_PUBLIC_VAPID_PUBLIC_KEY` fallback.
 
 ### Post-MVP product opportunities (PRD section 30)
 
@@ -228,7 +228,7 @@ These are intentionally out of scope for the MVP and should only be built once t
 ## 6. Known limitations and gotchas
 
 - **Sign-in is GitHub-only.** The seeded `demo@example.com` / password account no longer works because the credentials provider is disabled. Local dev now requires GitHub OAuth credentials to log in at all.
-- **Turso + serverless transactions (the P0 lesson).** An interactive `db.transaction()` does **not** reliably commit over Turso/libSQL HTTP in Vercel's serverless runtime: the connection is not sticky, so the `COMMIT` can be dropped and the whole write silently rolls back ("check-in saved but nothing persists"). The fix, and the rule going forward, is to use a single atomic `db.batch()` for multi-statement writes. See `src/server/data/checkin-writes.ts` and `tests/checkin-persistence.test.ts`.
+- **Turso + serverless transactions (the P0 lesson).** An interactive `db.transaction()` does **not** reliably commit over Turso/libSQL HTTP in a serverless runtime (first seen on Vercel, and the same on Workers): the connection is not sticky, so the `COMMIT` can be dropped and the whole write silently rolls back ("check-in saved but nothing persists"). The fix, and the rule going forward, is to use a single atomic `db.batch()` for multi-statement writes. See `src/server/data/checkin-writes.ts` and `tests/checkin-persistence.test.ts`.
 - **Production has no seed/demo data.** Turso in prod starts empty; every account is a fresh GitHub sign-in. `npm run db:seed` is local-only.
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).
 - **Offline data entry is out of scope** for this MVP by design (PRD 18). The service worker caches assets, not HTML.
@@ -243,5 +243,4 @@ Small, high-value polishes (listed, not implemented):
 
 - **Whole-number stepper for integer units** (e.g. cups) to avoid decimal input where it makes no sense.
 - **Ship a favicon.ico.** `config/branding.ts` references `/favicon.ico`, but only `icon.svg` and the PNGs exist in `public/`.
-- **Point at a custom domain** and update `AUTH_URL` + the GitHub OAuth callback, retiring the `-sandy` suffix.
 - **Expand the authenticated E2E suite** to cover the full check-in, History, and Insights loop.

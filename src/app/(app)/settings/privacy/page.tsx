@@ -2,6 +2,7 @@ import {
   Ban,
   Download,
   Lock,
+  Server,
   ShieldCheck,
   UserRoundCheck,
 } from "lucide-react";
@@ -40,6 +41,11 @@ const POINTS: { icon: LucideIcon; title: string; body: string }[] = [
     icon: Ban,
     title: "Never sold, never used for training",
     body: `We don't sell your personal tracking data, and we don't use your entries to train public AI models. ${branding.appName} exists to help you understand yourself, not to monetize what you record.`,
+  },
+  {
+    icon: Server,
+    title: "Where your data lives",
+    body: `${branding.appName} runs on Cloudflare Workers and stores your records in a Turso database. Sign-in goes through GitHub, which shares your name, email address and profile picture. Reminders reach your device through your browser's push service, and they carry only the reminder text, never your entries.`,
   },
   {
     icon: ShieldCheck,

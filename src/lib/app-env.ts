@@ -1,7 +1,8 @@
 /**
  * Which deployment this server is. APP_ENV is set per deployment (wrangler.jsonc sets
- * "production" for the Cloudflare Worker); the Vercel deployment, which predates it,
- * maps VERCEL_ENV onto the same names. Anything else is a local run.
+ * "production" for the Cloudflare Worker, which serves production); the legacy Vercel
+ * deployment, which predates it, maps VERCEL_ENV onto the same names until it is
+ * retired. Anything else is a local run.
  *
  * Only a deployed environment fails closed without Turso: a local SQLite file there would
  * be ephemeral and could appear to accept writes before silently losing them.
