@@ -4,8 +4,8 @@ A mobile-first Progressive Web App for connecting what you do with how you feel.
 All brand-facing identity lives behind a single config module - see [Branding](#branding-single-config-point).
 
 This repository implements the **full MVP** per `docs/PRD.md` - all seven phases (foundation, tracking setup, daily tracking, history, analytics, PWA/notifications, and privacy/release polish) are shipped.
-It is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app); pushes to `main` auto-deploy via Vercel's Git integration.
-Local development runs entirely offline against a plain SQLite file; production runs on Vercel with a cloud Turso database.
+It is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app) on Vercel, and also runs on Cloudflare Workers at [feelium.nathancwatkins23.workers.dev](https://feelium.nathancwatkins23.workers.dev), where production moves once its domain and database are switched over.
+Local development runs entirely offline against a plain SQLite file; deployments use a cloud Turso database.
 
 > **Sign-in is currently GitHub OAuth only.** The email magic-link and email/password providers are built and preserved but temporarily disabled (see [Signing in](#signing-in), [`src/auth.ts`](src/auth.ts), and [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002).
 
@@ -100,9 +100,29 @@ The lower-level `test:persistence` command still accepts `TEST_LIBSQL_URL` when 
 
 > `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for local exploration. It also creates a `demo@example.com` password account, but that password login no longer works because the credentials provider is disabled (GitHub-only). The seeded tracking data is still useful for exercising History and Insights locally.
 
+## Hosting on Cloudflare Workers
+
+The app runs on Cloudflare Workers, built with [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare), at https://feelium.nathancwatkins23.workers.dev until a custom domain is chosen.
+[`wrangler.jsonc`](wrangler.jsonc) holds the Worker config: `APP_ENV`, the reminder Cron Trigger and the plain variables.
+[`worker/index.ts`](worker/index.ts) is the entry point; it serves the Next.js app and adds the Cron Trigger handler from [`worker/handlers.ts`](worker/handlers.ts).
+[`.dev.vars.example`](.dev.vars.example) lists every secret; set each with `npx wrangler secret put NAME`.
+
+```bash
+npm run build:worker     # OpenNext build into .open-next/
+npm run preview:worker   # build, then serve it locally in workerd (reads .dev.vars)
+npm run deploy:worker    # build, then deploy
+npm run cf-typegen       # regenerate cloudflare-env.d.ts after changing wrangler.jsonc or .dev.vars.example
+```
+
+- `APP_ENV` (`production`, `preview` or `development`, see [`src/lib/app-env.ts`](src/lib/app-env.ts)) says which deployment a server is. Any deployment refuses to start without Turso, so it never writes to an ephemeral SQLite file. Version preview URLs are off (`preview_urls: false`), because they would run with the production secrets and database.
+- Auth.js trusts the request host, so sign-in works on whichever origin serves the app without `AUTH_URL`; register `<origin>/api/auth/callback/github` on the GitHub OAuth app.
+- Keep `.env*` files with secrets out of the working tree when building for a deploy: OpenNext copies Next.js `.env` files into the Worker bundle.
+- The [`Deploy`](.github/workflows/deploy.yml) workflow deploys `main` after CI passes on it, once the `CLOUDFLARE_API_TOKEN` repository secret exists; until then it skips.
+- `PLAYWRIGHT_BASE_URL=<url>` runs the end-to-end suite against a running deployment; see [`tests/e2e/env.ts`](tests/e2e/env.ts) for the throwaway database and secret it needs.
+
 ## Deployment (Vercel + Turso)
 
-The app is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app), running on Vercel with a cloud [Turso](https://turso.tech) libSQL database.
+The app is **deployed and live** at [feelium-sandy.vercel.app](https://feelium-sandy.vercel.app), running on Vercel with a cloud [Turso](https://turso.tech) libSQL database, until production moves to the Worker.
 Deploys are **Git-connected**: pushing to the `main` branch of the GitHub repo triggers an automatic Vercel build and deploy.
 Local development is unchanged (a plain SQLite file).
 
@@ -148,7 +168,7 @@ Set these in the Vercel project (never commit real values).
 | `AUTH_EMAIL_FROM`    | No       | No     | From address for magic-link emails (verified Resend domain). Only relevant if magic-link is re-enabled. Defaults to `feelium <onboarding@resend.dev>`. |
 
 `DATABASE_URL` is not used in production when the `TURSO_*` variables are set.
-Web Push notifications additionally need `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and `CRON_SECRET` - see [`docs/notifications-and-pwa.md`](docs/notifications-and-pwa.md).
+Web Push notifications additionally need `VAPID_PUBLIC_KEY` (`NEXT_PUBLIC_VAPID_PUBLIC_KEY` on Vercel), `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and `CRON_SECRET` - see [`docs/notifications-and-pwa.md`](docs/notifications-and-pwa.md).
 
 ## Project structure
 

@@ -1,4 +1,5 @@
 import { defineConfig } from "drizzle-kit";
+import { isDeployed } from "./src/lib/app-env";
 
 // Env-driven migrations. The same migration files in ./drizzle apply to both targets.
 //
@@ -20,9 +21,9 @@ if ((tursoUrl && !tursoAuthToken) || (!tursoUrl && tursoAuthToken)) {
   );
 }
 
-if (!tursoUrl && (process.env.VERCEL === "1" || process.env.VERCEL_ENV)) {
+if (!tursoUrl && isDeployed()) {
   throw new Error(
-    "Refusing to run migrations against ephemeral SQLite on Vercel. Configure Turso.",
+    "Refusing to run migrations against ephemeral SQLite on a deployment. Configure Turso.",
   );
 }
 

@@ -37,13 +37,13 @@ Generate a key pair once:
 npx web-push generate-vapid-keys
 ```
 
-Then set these (locally in `.env.local`, in production as project environment variables):
+Then set these (locally in `.env.local`, on the Cloudflare Worker as secrets with `npx wrangler secret put NAME`):
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | client + server | Public key the browser subscribes with. Safe to expose. |
+| `VAPID_PUBLIC_KEY` | server, handed to the browser | Public key the browser subscribes with. Safe to expose. Read at runtime; the Vercel deployment sets it as `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, which is still read as a fallback. |
 | `VAPID_PRIVATE_KEY` | server only | Signs push messages. Secret. Never commit or expose. |
-| `VAPID_SUBJECT` | server only | Contact URI (`mailto:` or `https:`) sent to push services. |
+| `VAPID_SUBJECT` | server only | Contact URI (`mailto:` or `https:`) sent to push services. A plain variable in `wrangler.jsonc`. |
 | `CRON_SECRET` | server only | Bearer token guarding the scheduled send endpoint. |
 
 `.env.local` is git-ignored.
@@ -63,8 +63,10 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 ## Reminder delivery (production)
 
 The actual scheduled send needs a server trigger.
-The committed GitHub Actions workflow calls the endpoint every five minutes, which keeps Vercel Hobby deployments compatible with their once-daily cron limit.
-Scheduled workflows run from the default branch, so merge the workflow before expecting automatic delivery.
+On Cloudflare, a Cron Trigger (`2-57/5 * * * *` in `wrangler.jsonc`) calls the endpoint every five minutes in-process (`worker/handlers.ts`), with `CRON_SECRET` as the bearer token.
+While production is still on Vercel, the committed GitHub Actions workflow (`.github/workflows/reminders.yml`) calls the Vercel deployment on the same schedule instead, because Vercel Hobby only allows a once-daily cron; the `REMINDER_CRON_URL` repository variable names that deployment.
+Delete the workflow once production moves to the Worker, because the Cron Trigger replaces it.
+The two-minute delivery lease below keeps the two schedulers from sending the same reminder twice if they ever overlap on one database.
 
 `POST` or `GET` `/api/notifications/send`:
 

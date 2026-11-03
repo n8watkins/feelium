@@ -1,5 +1,11 @@
 name: Reminder delivery
 
+# Calls /api/notifications/send on the deployment named by the REMINDER_CRON_URL repository
+# variable (the Vercel deployment, which serves production until the move to Cloudflare),
+# because Vercel Hobby only allows a once-daily cron. The Cloudflare Worker runs the same
+# schedule as its own Cron Trigger (wrangler.jsonc), so delete this workflow once production
+# moves there.
+
 on:
   schedule:
     - cron: "2-57/5 * * * *"

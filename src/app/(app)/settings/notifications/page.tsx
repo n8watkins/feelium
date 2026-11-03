@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { NotificationSettings } from "@/components/notifications/notification-settings";
 import { DEFAULT_TIME_ZONE } from "@/lib/date";
 import { getCurrentProfile, listReminderSettings } from "@/server/data";
-import { isPushConfigured } from "@/server/push/webpush";
+import { isPushConfigured, vapidPublicKey as readVapidPublicKey } from "@/server/push/webpush";
 
 export const metadata = { title: "Notifications" };
 
@@ -12,7 +12,7 @@ export default async function NotificationSettingsPage() {
     getCurrentProfile(),
   ]);
   const pushConfigured = isPushConfigured();
-  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null;
+  const vapidPublicKey = readVapidPublicKey();
 
   return (
     <>

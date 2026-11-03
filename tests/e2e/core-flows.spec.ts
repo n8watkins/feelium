@@ -2,10 +2,13 @@ import { createClient, type Client } from "@libsql/client";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { encode } from "next-auth/jwt";
 
-const BASE_URL = "http://127.0.0.1:3100";
-const DATABASE_URL = "file:./.data/e2e.db";
-const SESSION_COOKIE = "authjs.session-token";
-const SESSION_SECRET = "feelium-e2e-secret-not-for-production";
+import { e2e } from "./env";
+
+const { baseURL: BASE_URL, database: DATABASE, sessionSecret: SESSION_SECRET } = e2e;
+// Auth.js prefixes the cookie on HTTPS origins.
+const SESSION_COOKIE = BASE_URL.startsWith("https:")
+  ? "__Secure-authjs.session-token"
+  : "authjs.session-token";
 
 function captureProductErrors(page: Page, errors: string[]) {
   page.on("pageerror", (error) => errors.push(error.message));
@@ -145,7 +148,7 @@ test("preferences, categories, Today editing, and reminders work together", asyn
   page,
 }, testInfo) => {
   const platform = platformFor(testInfo);
-  const database = createClient({ url: DATABASE_URL });
+  const database = createClient(DATABASE);
   const [user] = (
     await database.execute(
       "select id, email from user where email = 'demo@example.com'",
@@ -171,6 +174,7 @@ test("preferences, categories, Today editing, and reminders work together", asyn
     value: token,
     url: BASE_URL,
     httpOnly: true,
+    secure: BASE_URL.startsWith("https:"),
     sameSite: "Lax" as const,
   };
   await context.addCookies([sessionCookie]);
