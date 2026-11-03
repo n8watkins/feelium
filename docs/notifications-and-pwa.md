@@ -64,13 +64,11 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 
 The actual scheduled send needs a server trigger.
 On Cloudflare, a Cron Trigger (`2-57/5 * * * *` in `wrangler.jsonc`) calls the endpoint every five minutes in-process (`worker/handlers.ts`), with `CRON_SECRET` as the bearer token.
-While production is still on Vercel, the committed GitHub Actions workflow (`.github/workflows/reminders.yml`) calls the Vercel deployment on the same schedule instead, because Vercel Hobby only allows a once-daily cron; the `REMINDER_CRON_URL` repository variable names that deployment.
-Delete the workflow once production moves to the Worker, because the Cron Trigger replaces it.
-The two-minute delivery lease below keeps the two schedulers from sending the same reminder twice if they ever overlap on one database.
+It is the only caller.
 
 `POST` or `GET` `/api/notifications/send`:
 
-- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the scheduled workflow attaches.
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the Cron Trigger attaches.
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.

@@ -13,7 +13,7 @@ test("the Worker is the production deployment and has no preview URLs sharing it
   assert.equal(config.preview_urls, false);
 });
 
-test("the reminder schedule matches the GitHub Actions workflow it replaces", () => {
+test("reminders run every five minutes", () => {
   assert.deepEqual(config.triggers.crons, ["2-57/5 * * * *"]);
 });
 
