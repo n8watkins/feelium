@@ -120,6 +120,15 @@ npm run cf-typegen       # regenerate cloudflare-env.d.ts after changing wrangle
 - The [`Deploy`](.github/workflows/deploy.yml) workflow deploys `main` after CI passes on it, once the `CLOUDFLARE_API_TOKEN` repository secret exists; until then it skips.
 - `PLAYWRIGHT_BASE_URL=<url>` runs the end-to-end suite against a running deployment; see [`tests/e2e/env.ts`](tests/e2e/env.ts) for the throwaway database and secret it needs.
 
+### Reading the logs
+
+Workers Logs keeps every request (`observability` in `wrangler.jsonc`, `head_sampling_rate: 1`).
+In the Cloudflare dashboard, open Workers & Pages, then the `feelium` Worker, then Logs.
+To stream them live, run `npx wrangler tail feelium --format pretty`.
+`--search` matches log messages only, not request URLs, so use `--status error` or no filter to see requests.
+Failures log one JSON line with `event`, `reason` and `route`: Auth.js errors as `auth_error` with the error type (such as `CallbackRouteError` or `InvalidCheck`), a masked message and the provider's OAuth error code, and errors thrown in pages, route handlers or the proxy as `unhandled_exception` with the route (`src/instrumentation.ts`).
+They never carry secrets, tokens, OAuth codes or state values, cookies, emails or other personal data.
+
 ## Deployment (Turso)
 
 Production uses a cloud [Turso](https://turso.tech) libSQL database; local development is unchanged (a plain SQLite file).

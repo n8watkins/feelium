@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
+import { authLogger } from "@/lib/log";
+
 /**
  * Shared, dependency-light Auth.js config. Contains no database adapter, providers with
  * secrets, or Node-only modules, so it can be imported by the proxy (route guard) as
@@ -21,6 +23,8 @@ const authConfig = {
   // production, automatically uses secure, host-prefixed session cookies. AUTH_SECRET must
   // be set in production.
   trustHost: true,
+  // Error type and a masked message only; see src/lib/log.ts.
+  logger: authLogger,
   // Providers are added in `auth.ts` (they pull in the DB adapter and bcrypt).
   providers: [],
   callbacks: {

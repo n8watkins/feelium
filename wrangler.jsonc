@@ -19,7 +19,8 @@
     "binding": "ASSETS"
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 1
   },
   // Every five minutes, offset by two: /api/notifications/send pushes the
   // reminders that are due.
