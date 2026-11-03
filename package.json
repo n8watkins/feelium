@@ -22,7 +22,7 @@
     "test:persistence:local": "bash scripts/test-persistence-local.sh"
   },
   "dependencies": {
-    "@auth/drizzle-adapter": "^1.11.2",
+    "@auth/drizzle-adapter": "^1.11.3",
     "@libsql/client": "^0.17.4",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
