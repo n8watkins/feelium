@@ -8,7 +8,7 @@ import webpush from "web-push";
  * notification settings page; the private key (VAPID_PRIVATE_KEY) stays server-side.
  * Both are read at runtime, so a deployment's keys are Worker secrets rather than values
  * inlined by `next build`. NEXT_PUBLIC_VAPID_PUBLIC_KEY is still read as a fallback for
- * the Vercel deployment, which sets that name.
+ * the legacy Vercel deployment, which sets that name, until it is retired.
  *
  * Generate keys locally with `npx web-push generate-vapid-keys` and put them in
  * .env.local (see .env.local.example). Everything degrades gracefully when the keys are

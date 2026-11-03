@@ -41,7 +41,7 @@ Then set these (locally in `.env.local`, on the Cloudflare Worker as secrets wit
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `VAPID_PUBLIC_KEY` | server, handed to the browser | Public key the browser subscribes with. Safe to expose. Read at runtime; the Vercel deployment sets it as `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, which is still read as a fallback. |
+| `VAPID_PUBLIC_KEY` | server, handed to the browser | Public key the browser subscribes with. Safe to expose. Read at runtime. `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, the name the legacy Vercel deployment used, is still read as a fallback. |
 | `VAPID_PRIVATE_KEY` | server only | Signs push messages. Secret. Never commit or expose. |
 | `VAPID_SUBJECT` | server only | Contact URI (`mailto:` or `https:`) sent to push services. A plain variable in `wrangler.jsonc`. |
 | `CRON_SECRET` | server only | Bearer token guarding the scheduled send endpoint. |
@@ -84,14 +84,9 @@ It is the only caller.
 - Subscriptions the push service reports as gone (404/410) are pruned automatically.
 - `?dryRun=1` reports which reminder occurrences are due without sending. `?window=N` widens the match (clamped to 60).
 
-The committed schedule runs every five minutes and retries transient HTTP failures without allowing overlapping workflow runs.
-Configure these GitHub repository settings before enabling reminders in production:
-
-- Set the `REMINDER_CRON_URL` Actions variable to the production deployment origin, such as `https://feelium.example`.
-- Set the `CRON_SECRET` Actions secret to the same random value as the production deployment's `CRON_SECRET` environment variable.
-
-GitHub may delay scheduled workflows during periods of high load.
+Cloudflare runs Cron Triggers on a best-effort schedule.
 The endpoint's ten-minute due window tolerates one delayed five-minute invocation, and the persisted due queue plus retry-safe delivery state protects overlapping or retried requests.
+There is no GitHub Actions schedule any more: the `CRON_SECRET` the endpoint checks is the Worker secret set with `npx wrangler secret put CRON_SECRET`.
 
 A manual test send (to the current user's own devices, ignoring the schedule) is available from the `Settings > Notifications` screen via "Send a test".
 

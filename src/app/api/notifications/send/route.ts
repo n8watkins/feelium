@@ -22,9 +22,10 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
 /**
  * Scheduled reminder-send endpoint (PRD 17).
  *
- * PRODUCTION: the committed GitHub Actions schedule calls this endpoint every five
- * minutes with `Authorization: Bearer <CRON_SECRET>`; we verify it against the
- * CRON_SECRET env var. See docs/notifications-and-pwa.md for operations.
+ * PRODUCTION: the Worker's Cron Trigger (wrangler.jsonc, worker/handlers.ts) calls this
+ * endpoint in-process every five minutes with `Authorization: Bearer <CRON_SECRET>`; we
+ * verify it against the CRON_SECRET env var. See docs/notifications-and-pwa.md for
+ * operations.
  *
  * For each enabled reminder, if the resolved occurrence in its saved
  * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
@@ -322,7 +323,7 @@ export async function POST(request: NextRequest) {
   return handle(request);
 }
 
-// Support GET for compatible external schedulers as well as the committed POST workflow.
+// Support GET for compatible external schedulers as well as the Cron Trigger's POST.
 export async function GET(request: NextRequest) {
   return handle(request);
 }
