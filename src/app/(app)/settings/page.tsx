@@ -23,7 +23,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentProfile } from "@/server/data";
-import { signOut } from "./actions";
 
 const WEEKDAYS = [
   "Sunday",
@@ -62,7 +61,8 @@ export default async function SettingsPage() {
             <CardDescription>{session?.user?.email ?? "Signed in"}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={signOut}>
+            {/* A plain POST to /api: a server action cannot clear the cookie on Workers. */}
+            <form method="post" action="/api/account/signout">
               <Button type="submit" variant="outline">
                 Log out
               </Button>

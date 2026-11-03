@@ -37,6 +37,33 @@ const authMiddleware = auth((req) => {
   return NextResponse.next({ request: { headers: req.headers } });
 }) as unknown as NextMiddleware;
 
+// The Auth.js wrapper re-issues (rolls) the session cookie on every request it sees. Only
+// let that through on a real page navigation. Prefetches, RSC fetches and server-action
+// POSTs run alongside other requests, and a refreshed cookie on one of them can land after
+// a sign-out has cleared it, signing the user straight back in. On Workers that also beat
+// the clearing cookie of a sign-out server action, because OpenNext emits proxy cookies
+// after the page's own.
+function isPageNavigation(request: NextRequest): boolean {
+  return (
+    request.method === "GET" &&
+    request.headers.get("sec-fetch-mode") === "navigate" &&
+    !request.headers.has("rsc") &&
+    !request.headers.has("next-router-prefetch") &&
+    !request.headers.has("next-action")
+  );
+}
+
+const SESSION_COOKIE = /^(__Secure-)?authjs\.session-token(\.\d+)?=/;
+
+function dropSessionRefresh(response: Response) {
+  const cookies = response.headers.getSetCookie();
+  if (!cookies.some((cookie) => SESSION_COOKIE.test(cookie))) return;
+  response.headers.delete("set-cookie");
+  for (const cookie of cookies) {
+    if (!SESSION_COOKIE.test(cookie)) response.headers.append("set-cookie", cookie);
+  }
+}
+
 // Next 16 statically requires a named `proxy` (or default) function export, so wrap the
 // Auth.js middleware in one.
 export default async function proxy(request: NextRequest, event: NextFetchEvent) {
@@ -58,6 +85,7 @@ export default async function proxy(request: NextRequest, event: NextFetchEvent)
       request: { headers: requestHeaders },
     });
   securedResponse.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  if (!isPageNavigation(request)) dropSessionRefresh(securedResponse);
   return securedResponse;
 }
 
