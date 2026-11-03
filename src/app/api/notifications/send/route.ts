@@ -17,6 +17,7 @@ import {
   type ReminderCandidate,
 } from "@/server/data";
 import { evaluateReminder, type ReminderEvaluation } from "@/lib/reminders";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
@@ -53,13 +54,11 @@ const REMINDER_RETRY_DELAY_MS = 60_000;
 const MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION = 3;
 
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false; // never allow when unconfigured
-  const auth = request.headers.get("authorization");
-  if (auth === `Bearer ${secret}`) return true;
-  return (
-    process.env.NODE_ENV !== "production" &&
-    request.nextUrl.searchParams.get("secret") === secret
+  return isCronAuthorized(
+    request.headers.get("authorization"),
+    request.nextUrl.searchParams.get("secret"),
+    process.env.CRON_SECRET,
+    process.env.NODE_ENV === "production",
   );
 }
 
@@ -323,7 +322,3 @@ export async function POST(request: NextRequest) {
   return handle(request);
 }
 
-// Support GET for compatible external schedulers as well as the Cron Trigger's POST.
-export async function GET(request: NextRequest) {
-  return handle(request);
-}

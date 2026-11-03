@@ -2,6 +2,8 @@ import "server-only";
 
 import webpush from "web-push";
 
+import { isAllowedPushEndpoint } from "@/lib/push-endpoints";
+
 /**
  * Web Push transport (PRD 17). Configures VAPID once per server process and sends
  * notifications. The public key (VAPID_PUBLIC_KEY) is also handed to the browser by the
@@ -60,12 +62,17 @@ export type SendResult =
 /**
  * Sends one push message. Never throws: returns a result so callers can prune dead
  * subscriptions. `gone` is true for 404/410, which mean the subscription is expired and
- * should be deleted.
+ * should be deleted, and for an endpoint that is not a browser push service.
  */
 export async function sendPush(
   subscription: webpush.PushSubscription,
   payload: PushPayload,
 ): Promise<SendResult> {
+  // Subscriptions saved before endpoints were checked: never contact the host, and report
+  // the subscription gone so the caller prunes it.
+  if (!isAllowedPushEndpoint(subscription.endpoint)) {
+    return { ok: false, gone: true, error: "Not a browser push service endpoint" };
+  }
   ensureConfigured();
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload), {

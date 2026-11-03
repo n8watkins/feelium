@@ -66,9 +66,9 @@ The actual scheduled send needs a server trigger.
 On Cloudflare, a Cron Trigger (`2-57/5 * * * *` in `wrangler.jsonc`) calls the endpoint every five minutes in-process (`worker/handlers.ts`), with `CRON_SECRET` as the bearer token.
 It is the only caller.
 
-`POST` or `GET` `/api/notifications/send`:
+`POST` `/api/notifications/send` (GET is refused since 2026-11-03):
 
-- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the Cron Trigger attaches.
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the Cron Trigger attaches, compared in constant time (`src/lib/cron-auth.ts`).
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.
@@ -88,7 +88,12 @@ Cloudflare runs Cron Triggers on a best-effort schedule.
 The endpoint's ten-minute due window tolerates one delayed five-minute invocation, and the persisted due queue plus retry-safe delivery state protects overlapping or retried requests.
 There is no GitHub Actions schedule any more: the `CRON_SECRET` the endpoint checks is the Worker secret set with `npx wrangler secret put CRON_SECRET`.
 
-A manual test send (to the current user's own devices, ignoring the schedule) is available from the `Settings > Notifications` screen via "Send a test".
+A manual test send is available from `Settings > Notifications` via "Send a test". It goes only to the browser you click it in, at most once a minute per account.
+
+Subscriptions are limited (`src/lib/push-endpoints.ts`):
+
+- The endpoint must be a browser push service (FCM, Mozilla, Apple, Windows WNS). The server POSTs to it, so any other host is refused when saving and is never contacted when sending; old rows with another host are pruned on their next send.
+- An account keeps its 10 most recently used subscriptions; registering an eleventh browser drops the oldest.
 
 ## Local testing
 
