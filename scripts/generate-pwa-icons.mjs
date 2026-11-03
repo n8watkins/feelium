@@ -1,52 +1,77 @@
 /**
- * Generates the rasterized PWA icons from the single source SVG mark.
+ * Renders every raster icon from the SVG sources in brand/ (see brand/README.md).
+ * Run after changing a source, and commit the output:
  *
- * The brand mark lives in public/icon.svg (see src/config/branding.ts). Chromium
- * installability and iOS home-screen icons need raster PNGs, so we derive them here
- * rather than hand-editing binaries. Re-run after the mark changes:
- *
- *   node scripts/generate-pwa-icons.mjs
+ *   npm run icons
  *
  * Outputs:
- *   public/icon-192.png           standard any-purpose icon (192x192)
- *   public/icon-512.png           standard any-purpose icon (512x512)
- *   public/icon-maskable-512.png  full-bleed maskable icon (safe-zone padded)
- *   src/app/apple-icon.png        iOS apple-touch icon (180x180, picked up by Next)
+ *   src/app/icon.svg                 favicon, switches with the browser's color scheme
+ *   src/app/favicon.ico              16/32/48 tile, for browsers that skip the SVG
+ *   src/app/apple-icon.png           iOS home screen (180, square; iOS rounds it)
+ *   public/icon-192.png, -512.png    manifest "any" icons (rounded tile)
+ *   public/icon-maskable-192.png, -512.png  manifest maskable icons (safe-zone padded)
+ *   brand/*.png                      512 and 1024 exports for docs, GitHub and listings
  */
-import { readFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BG = "#0A0A0A";
-const FG = "#FAFAFA";
+const brand = (name) => resolve(root, "brand", name);
 
-/** The three bars from the source mark, centered on a full-bleed background. */
-function markSvg({ radius }) {
-  return `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="App icon">
-  <rect width="512" height="512" rx="${radius}" fill="${BG}"/>
-  <rect x="130" y="272" width="60" height="112" rx="18" fill="${FG}"/>
-  <rect x="226" y="208" width="60" height="176" rx="18" fill="${FG}"/>
-  <rect x="322" y="144" width="60" height="240" rx="18" fill="${FG}"/>
-</svg>`;
+async function png(svgName, width, height = width) {
+  const svg = await readFile(brand(svgName));
+  // A high density keeps edges crisp before the resize.
+  return sharp(svg, { density: 384 }).resize(width, height, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
 }
 
-// Rounded corners for the standard icon; square (full-bleed) for maskable/apple so the
-// platform mask is not double-rounded and the background fills the whole safe zone.
-const rounded = Buffer.from(markSvg({ radius: 112 }));
-const square = Buffer.from(markSvg({ radius: 0 }));
-
-async function emit(svg, size, outPath) {
-  await sharp(svg).resize(size, size).png().toFile(resolve(root, outPath));
-  console.log(`  wrote ${outPath} (${size}x${size})`);
+async function emit(svgName, outPath, width, height = width) {
+  await writeFile(resolve(root, outPath), await png(svgName, width, height));
+  console.log(`  wrote ${outPath} (${width}x${height})`);
 }
 
-console.log("Generating PWA icons from public/icon.svg…");
-await readFile(resolve(root, "public/icon.svg")); // fail fast if the source mark is missing
-await emit(rounded, 192, "public/icon-192.png");
-await emit(rounded, 512, "public/icon-512.png");
-await emit(square, 512, "public/icon-maskable-512.png");
-await emit(square, 180, "src/app/apple-icon.png");
+/** Packs PNG images into one .ico file (PNG-compressed entries, supported everywhere current). */
+function ico(images) {
+  const header = Buffer.alloc(6 + images.length * 16);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+  let offset = header.length;
+  images.forEach(({ size, data }, index) => {
+    const entry = 6 + index * 16;
+    header.writeUInt8(size, entry);
+    header.writeUInt8(size, entry + 1);
+    header.writeUInt16LE(1, entry + 4);
+    header.writeUInt16LE(32, entry + 6);
+    header.writeUInt32LE(data.length, entry + 8);
+    header.writeUInt32LE(offset, entry + 12);
+    offset += data.length;
+  });
+  return Buffer.concat([header, ...images.map((image) => image.data)]);
+}
+
+console.log("Rendering icons from brand/…");
+await copyFile(brand("feelium-favicon.svg"), resolve(root, "src/app/icon.svg"));
+console.log("  wrote src/app/icon.svg");
+
+const favicon = [];
+for (const size of [16, 32, 48]) favicon.push({ size, data: await png("feelium-tile.svg", size) });
+await writeFile(resolve(root, "src/app/favicon.ico"), ico(favicon));
+console.log("  wrote src/app/favicon.ico (16, 32, 48)");
+
+await emit("feelium-tile-square.svg", "src/app/apple-icon.png", 180);
+await emit("feelium-tile.svg", "public/icon-192.png", 192);
+await emit("feelium-tile.svg", "public/icon-512.png", 512);
+await emit("feelium-tile-maskable.svg", "public/icon-maskable-192.png", 192);
+await emit("feelium-tile-maskable.svg", "public/icon-maskable-512.png", 512);
+
+// The marks are 376x256 (the two discs plus clear space).
+for (const variant of ["light", "dark"]) {
+  await emit(`feelium-mark-${variant}.svg`, `brand/feelium-mark-${variant}.png`, 512, 349);
+  await emit(`feelium-mark-${variant}.svg`, `brand/feelium-mark-${variant}-1024.png`, 1024, 698);
+}
+await emit("feelium-tile.svg", "brand/feelium.png", 512);
+await emit("feelium-tile.svg", "brand/feelium-tile-1024.png", 1024);
 console.log("Done.");

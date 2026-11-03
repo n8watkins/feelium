@@ -24,26 +24,26 @@ export type BrandIcon = {
 };
 
 /**
- * Icon references live here so swapping artwork is a one-file change. The Phase 1
- * foundation shipped a single scalable SVG mark; Phase 6 (PWA) added the rasterized
- * PNG sizes and maskable variant. The PNGs are derived from the SVG by
- * `node scripts/generate-pwa-icons.mjs`; the iOS apple-touch icon lives at
- * src/app/apple-icon.png (Next file convention).
+ * Icon references. The sources are the SVGs in brand/ (see brand/README.md); `npm run
+ * icons` renders the PNGs, src/app/favicon.ico, src/app/icon.svg (the favicon, served at
+ * /icon.svg) and src/app/apple-icon.png (Next file conventions).
  */
 const ICONS = {
   svg: "/icon.svg",
   favicon: "/favicon.ico",
   png192: "/icon-192.png",
   png512: "/icon-512.png",
+  maskable192: "/icon-maskable-192.png",
   maskable512: "/icon-maskable-512.png",
 } as const;
 
 const MANIFEST_ICONS: BrandIcon[] = [
-  // Scalable SVG first for browsers that honor it; raster PNGs guarantee installability
-  // (Chromium favors a concrete 192/512) and a dedicated maskable icon for Android masks.
-  { src: ICONS.svg, sizes: "any", type: "image/svg+xml", purpose: "any" },
+  // The rounded tile for "any", and a square tile with the mark in the safe zone for
+  // Android masks. (The SVG favicon switches colors with the browser theme, so it is left
+  // out here: an installed icon needs its own background.)
   { src: ICONS.png192, sizes: "192x192", type: "image/png", purpose: "any" },
   { src: ICONS.png512, sizes: "512x512", type: "image/png", purpose: "any" },
+  { src: ICONS.maskable192, sizes: "192x192", type: "image/png", purpose: "maskable" },
   { src: ICONS.maskable512, sizes: "512x512", type: "image/png", purpose: "maskable" },
 ];
 
