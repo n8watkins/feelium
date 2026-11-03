@@ -26,6 +26,11 @@ import {
   updateReminderForUser,
   type ReminderScheduleInput,
 } from "./reminder-schedule-operations";
+import {
+  claimTestPushForUser,
+  findPushSubscriptionForUser,
+  savePushSubscriptionForUser,
+} from "./push-subscription-operations";
 import { requireUserId } from "./session";
 
 /**
@@ -100,25 +105,7 @@ export async function savePushSubscription(
   deviceName?: string | null,
 ): Promise<void> {
   const userId = await requireUserId();
-  const data = subscription as unknown as Record<string, unknown>;
-  await db
-    .insert(pushSubscriptions)
-    .values({
-      userId,
-      endpoint: subscription.endpoint,
-      subscriptionData: data,
-      deviceName: deviceName ?? null,
-      lastUsedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [pushSubscriptions.userId, pushSubscriptions.endpoint],
-      set: {
-        subscriptionData: data,
-        lastUsedAt: new Date(),
-        reminderFailureCount: 0,
-        reminderQuarantinedAt: null,
-      },
-    });
+  await savePushSubscriptionForUser(db, userId, subscription, deviceName ?? null, new Date());
 }
 
 /** Removes one of the current user's push subscriptions by endpoint. */
@@ -136,13 +123,16 @@ export async function deleteMyPushSubscription(
     );
 }
 
-/** All push subscriptions belonging to the current user (e.g. for a test send). */
-export async function listMyPushSubscriptions() {
+/** The current user's subscription for one browser, by its endpoint. */
+export async function getMyPushSubscription(endpoint: string) {
   const userId = await requireUserId();
-  return db
-    .select()
-    .from(pushSubscriptions)
-    .where(eq(pushSubscriptions.userId, userId));
+  return findPushSubscriptionForUser(db, userId, endpoint);
+}
+
+/** Takes the current user's test-reminder slot (at most one test a minute). */
+export async function claimMyTestPush(): Promise<boolean> {
+  const userId = await requireUserId();
+  return claimTestPushForUser(db, userId, new Date());
 }
 
 // ---- System-scoped (reminder-send job only) ------------------------------------------

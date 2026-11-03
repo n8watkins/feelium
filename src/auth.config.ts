@@ -31,12 +31,15 @@ const authConfig = {
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // The adapter's user row carries session_version; requireUserId compares it.
+        token.sv = (user as { sessionVersion?: number }).sessionVersion ?? 0;
       }
       return token;
     },
     session({ session, token }) {
       if (session.user && typeof token.id === "string") {
         session.user.id = token.id;
+        session.user.sessionVersion = typeof token.sv === "number" ? token.sv : 0;
       }
       return session;
     },

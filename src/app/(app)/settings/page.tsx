@@ -62,11 +62,18 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent>
             {/* A plain POST to /api: a server action cannot clear the cookie on Workers. */}
-            <form method="post" action="/api/account/signout">
-              <Button type="submit" variant="outline">
-                Log out
-              </Button>
-            </form>
+            <div className="flex flex-wrap gap-2">
+              <form method="post" action="/api/account/signout">
+                <Button type="submit" variant="outline">
+                  Log out
+                </Button>
+              </form>
+              <form method="post" action="/api/account/signout-everywhere">
+                <Button type="submit" variant="ghost">
+                  Log out on every device
+                </Button>
+              </form>
+            </div>
           </CardContent>
         </Card>
 

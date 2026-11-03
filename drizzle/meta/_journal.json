@@ -64,6 +64,13 @@
       "when": 1784092495974,
       "tag": "0008_equal_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793744387042,
+      "tag": "0009_security_hardening",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { signOut } from "@/auth";
+import { isSameOriginPost } from "@/lib/same-origin";
 
 /**
  * Sign-out endpoint. It lives under /api on purpose: the route guard (proxy) excludes
@@ -20,19 +21,8 @@ export async function GET() {
   await signOut({ redirectTo: "/login" });
 }
 
-/** True when the browser says the form was posted from this site (CSRF protection). */
-function isSameOrigin(request: NextRequest): boolean {
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite && fetchSite !== "same-origin") return false;
-  const origin = request.headers.get("origin");
-  if (!origin) return fetchSite === "same-origin";
-  const allowed = new Set([request.nextUrl.origin]);
-  if (process.env.AUTH_URL) allowed.add(new URL(process.env.AUTH_URL).origin);
-  return allowed.has(origin);
-}
-
 export async function POST(request: NextRequest) {
-  if (!isSameOrigin(request)) {
+  if (!isSameOriginPost(request)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   // redirect: false so the response can be a 303: a 307 would replay the POST on /login.

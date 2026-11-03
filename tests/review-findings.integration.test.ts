@@ -35,7 +35,8 @@ async function createTestDatabase() {
   await client.executeMultiple(`
     create table user (
       id text primary key,
-      email text unique
+      email text unique,
+      session_version integer not null default 0
     );
     create table profile (
       user_id text primary key references user(id) on delete cascade,
@@ -43,6 +44,7 @@ async function createTestDatabase() {
       timezone text not null default 'UTC',
       auto_sync_timezone integer not null default 0,
       week_starts_on integer not null default 1,
+      last_test_push_at integer,
       created_at integer not null,
       updated_at integer not null
     );

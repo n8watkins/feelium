@@ -10,6 +10,8 @@ import type { NextConfig } from "next";
 const appRoot = __dirname;
 
 const securityHeaders = [
+  // HTTPS only, for a year, on every subdomain too (browsers ignore it over plain HTTP).
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
