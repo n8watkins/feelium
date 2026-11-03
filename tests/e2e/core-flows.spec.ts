@@ -210,3 +210,46 @@ test("preferences, categories, Today editing, and reminders work together", asyn
   expect(errors).toEqual([]);
   database.close();
 });
+
+test("Log out ends the session, so Today asks for sign-in again", async ({
+  context,
+  page,
+}) => {
+  const database = createClient(DATABASE);
+  const [user] = (
+    await database.execute(
+      "select id, email from user where email = 'demo@example.com'",
+    )
+  ).rows;
+  database.close();
+  expect(user?.id).toBeTruthy();
+  const userId = String(user.id);
+  const token = await encode({
+    token: { sub: userId, id: userId, email: String(user.email), name: "Demo" },
+    secret: SESSION_SECRET,
+    salt: SESSION_COOKIE,
+    maxAge: 60 * 60,
+  });
+  await context.addCookies([
+    {
+      name: SESSION_COOKIE,
+      value: token,
+      url: BASE_URL,
+      httpOnly: true,
+      secure: BASE_URL.startsWith("https:"),
+      sameSite: "Lax",
+    },
+  ]);
+
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page).toHaveURL(/\/login(\?|$)/);
+
+  const cookies = await context.cookies(BASE_URL);
+  expect(cookies.find((cookie) => cookie.name === SESSION_COOKIE)).toBeUndefined();
+
+  await page.goto("/today");
+  await expect(page).toHaveURL(/\/login\?next=%2Ftoday$/);
+  await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+});

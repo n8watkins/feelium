@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 
-import { signOut as authSignOut } from "@/auth";
 import {
   setProfileTimeZoneAndReminders,
   updateProfilePreferencesAndReminders,
@@ -27,11 +26,6 @@ function revalidateDateDependentPaths() {
   revalidatePath("/history");
   revalidatePath("/insights");
   revalidatePath("/settings/notifications");
-}
-
-/** Signs the current user out and returns them to the login screen. */
-export async function signOut() {
-  await authSignOut({ redirectTo: "/login" });
 }
 
 export async function updatePreferencesAction(
