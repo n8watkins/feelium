@@ -18,6 +18,8 @@ export const users = sqliteTable("user", {
   email: text("email").unique(),
   emailVerified: integer("email_verified", { mode: "timestamp_ms" }),
   image: text("image"),
+  // Bumped by "Sign out on every device"; a session minted under an older value is refused.
+  sessionVersion: integer("session_version").notNull().default(0),
   // Added for the optional email + password (Credentials) flow. Nullable: magic-link-only
   // users never set a password.
   passwordHash: text("password_hash"),

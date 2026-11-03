@@ -516,19 +516,15 @@ function DeviceNotifications({
   }
 
   async function sendTest() {
-    if (busy) return;
+    if (busy || !subscription) return;
     setBusy(true);
     try {
-      const result = await sendTestNotificationAction();
+      const result = await sendTestNotificationAction(subscription.endpoint);
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success(
-        result.sent === 1
-          ? "Test reminder sent."
-          : `Test reminder sent to ${result.sent} devices.`,
-      );
+      toast.success("Test reminder sent to this device.");
     } finally {
       setBusy(false);
     }

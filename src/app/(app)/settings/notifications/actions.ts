@@ -8,7 +8,8 @@ import {
   createReminderSettings,
   deleteReminderSettings,
   deleteMyPushSubscription,
-  listMyPushSubscriptions,
+  claimMyTestPush,
+  getMyPushSubscription,
   savePushSubscription,
   updateReminderSettings,
   type ReminderSchedule,
@@ -17,6 +18,7 @@ import {
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 import {
   deviceNameSchema,
+  pushEndpointSchema,
   pushSubscriptionSchema,
   recordIdSchema,
   reminderSettingsSchema,
@@ -167,47 +169,38 @@ export async function deleteReminderAction(
 }
 
 export type TestSendResult =
-  { ok: true; sent: number } | { ok: false; error: string };
+  { ok: true } | { ok: false; error: string };
 
 /**
- * Sends a test reminder to every device the current user has subscribed. Prunes any
- * subscriptions the push service reports as gone (404/410).
+ * Sends one test reminder to this browser only (its own subscription endpoint), at most
+ * once a minute per account. Prunes the subscription if the push service reports it gone.
  */
-export async function sendTestNotificationAction(): Promise<TestSendResult> {
+export async function sendTestNotificationAction(
+  endpoint: string,
+): Promise<TestSendResult> {
   if (!isPushConfigured()) {
     return { ok: false, error: "Push is not configured on the server." };
   }
-  const subs = await listMyPushSubscriptions();
-  if (subs.length === 0) {
-    return {
-      ok: false,
-      error: "No devices are subscribed on this account yet.",
-    };
+  const parsed = pushEndpointSchema.safeParse(endpoint);
+  const subscription = parsed.success ? await getMyPushSubscription(parsed.data) : null;
+  if (!subscription) {
+    return { ok: false, error: "Set up this device first, then send a test." };
   }
-
-  let sent = 0;
-  for (const sub of subs) {
-    const result = await sendPush(
-      sub.subscriptionData as unknown as WebPushSubscription,
-      {
-        title: REMINDER_TITLE,
-        body: "This is a test reminder. Tap to open your check-in.",
-        url: REMINDER_URL,
-      },
-    );
-    if (result.ok) {
-      sent += 1;
-    } else if (result.gone) {
-      await deleteMyPushSubscription(sub.endpoint);
-    }
+  if (!(await claimMyTestPush())) {
+    return { ok: false, error: "You just sent a test. Try again in a minute." };
   }
-
-  if (sent === 0) {
-    return {
-      ok: false,
-      error:
-        "Could not deliver to any device. Try turning reminders off and on.",
-    };
+  const result = await sendPush(
+    subscription.subscriptionData as unknown as WebPushSubscription,
+    {
+      title: REMINDER_TITLE,
+      body: "This is a test reminder. Tap to open your check-in.",
+      url: REMINDER_URL,
+    },
+  );
+  if (result.ok) return { ok: true };
+  if (result.gone) {
+    await deleteMyPushSubscription(subscription.endpoint);
+    return { ok: false, error: "This device's subscription expired. Set it up again." };
   }
-  return { ok: true, sent };
+  return { ok: false, error: "Could not deliver the test. Try again in a minute." };
 }

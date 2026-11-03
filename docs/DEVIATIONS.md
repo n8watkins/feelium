@@ -72,7 +72,8 @@ The GitHub OAuth callback is the only auth path fully wired up in production.
 The email magic-link and email/password providers are **disabled but preserved and reversible**:
 
 - `src/auth.ts` keeps the magic-link (`emailProvider`) and `Credentials` provider definitions commented out, with a re-enable note at the top of the file.
-- The server actions (`sendMagicLink`, `signInWithPassword`, `signUpWithPassword`) remain intact in `src/app/login/actions.ts`.
+- The flows (`sendMagicLink`, `signInWithPassword`, `signUpWithPassword`) are kept in `src/server/auth/email-sign-in.ts`, which is deliberately not a `"use server"` module: as server actions they stayed callable by a POST, and sign-up created accounts (2026-11-03 audit).
+  Re-enabling means wrapping them in server actions again, and sign-up must verify the email before it creates the account.
 - `src/app/login/page.tsx` shows only the "Continue with GitHub" button; the email/password + magic-link UI was removed but is documented as the only thing to restore.
 
 ### Consequences

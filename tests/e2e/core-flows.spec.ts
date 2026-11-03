@@ -14,14 +14,8 @@ function captureProductErrors(page: Page, errors: string[]) {
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() !== "error") return;
-    const text = message.text();
-    if (
-      text.includes("Executing inline script violates") ||
-      text.includes("Applying inline style violates")
-    ) {
-      return;
-    }
-    errors.push(text);
+    // CSP violations count as errors too (they used to be filtered out here).
+    errors.push(message.text());
   });
 }
 
@@ -243,7 +237,7 @@ test("Log out ends the session, so Today asks for sign-in again", async ({
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page).toHaveURL(/\/login(\?|$)/);
 
   const cookies = await context.cookies(BASE_URL);
@@ -252,4 +246,43 @@ test("Log out ends the session, so Today asks for sign-in again", async ({
   await page.goto("/today");
   await expect(page).toHaveURL(/\/login\?next=%2Ftoday$/);
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+});
+
+test("Log out on every device ends the session in another browser too", async ({ browser }) => {
+  const database = createClient(DATABASE);
+  const [user] = (await database.execute("select id, email from user where email = 'demo@example.com'")).rows;
+  database.close();
+  const userId = String(user.id);
+  const token = await encode({
+    token: { sub: userId, id: userId, email: String(user.email), name: "Demo" },
+    secret: SESSION_SECRET,
+    salt: SESSION_COOKIE,
+    maxAge: 60 * 60,
+  });
+  const cookie = { name: SESSION_COOKIE, value: token, url: BASE_URL, httpOnly: true, secure: BASE_URL.startsWith("https:"), sameSite: "Lax" as const };
+  // The same session in two browsers, as if a cookie had been copied to another device.
+  const here = await browser.newContext({ baseURL: BASE_URL });
+  const elsewhere = await browser.newContext({ baseURL: BASE_URL });
+  await here.addCookies([cookie]);
+  await elsewhere.addCookies([cookie]);
+  const other = await elsewhere.newPage();
+  await other.goto("/today");
+  await expect(other).toHaveURL(/\/today$/);
+
+  const page = await here.newPage();
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Log out on every device" }).click();
+  await expect(page).toHaveURL(/\/login(\?|$)/);
+
+  try {
+    await other.goto("/today");
+    await expect(other).toHaveURL(/\/login(\?|$)/);
+  } finally {
+    // The other tests sign the demo user in with version 0.
+    const reset = createClient(DATABASE);
+    await reset.execute({ sql: "update user set session_version = 0 where id = ?", args: [userId] });
+    reset.close();
+    await here.close();
+    await elsewhere.close();
+  }
 });

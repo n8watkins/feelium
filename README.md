@@ -72,7 +72,7 @@ Local development runs entirely offline against a plain SQLite file; deployments
 3. The session is created and you land on `/today`.
    A profile row (with timezone and start of week) is created automatically on first sign-in.
 
-> **Why GitHub-only?** Production only has the GitHub callback wired up, and Resend on the current plan can only email the account owner, so the magic-link flow was broken for everyone else. The email magic-link and email/password providers are fully built and **reversible** - the server actions remain in `src/app/login/actions.ts` and the providers are commented in `src/auth.ts` with a re-enable note. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002.
+> **Why GitHub-only?** Production only has the GitHub callback wired up, and Resend on the current plan can only email the account owner, so the magic-link flow was broken for everyone else. The email magic-link and email/password providers are fully built and **reversible** - the flows are kept in `src/server/auth/email-sign-in.ts` (not a server-action module, so they can't be called while disabled) and the providers are commented in `src/auth.ts` with a re-enable note. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002.
 
 ## Scripts
 

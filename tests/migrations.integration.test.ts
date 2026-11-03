@@ -204,3 +204,39 @@ test("migrations preserve legacy rows that exceed current application limits", a
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("the 0009 upgrade clears stored GitHub tokens and starts every session at version 0", async () => {
+  const root = await mkdtemp(join(tmpdir(), "feelium-migrations-0009-"));
+  const client = createClient({ url: `file:${join(root, "upgrade.db")}` });
+  try {
+    const journal = JSON.parse(
+      await readFile(join(migrationsFolder, "meta", "_journal.json"), "utf8"),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const folder = join(root, "before-0009");
+    await mkdir(join(folder, "meta"), { recursive: true });
+    const before = journal.entries.filter((entry) => entry.idx < 9);
+    for (const entry of before) {
+      await writeFile(join(folder, `${entry.tag}.sql`), await readFile(join(migrationsFolder, `${entry.tag}.sql`)));
+    }
+    await writeFile(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries: before }));
+    await migrate(drizzle(client), { migrationsFolder: folder });
+    await client.batch(
+      [
+        "insert into user (id, email) values ('owner', 'owner@example.test')",
+        `insert into account (user_id, type, provider, provider_account_id, access_token, refresh_token, scope)
+          values ('owner', 'oauth', 'github', '123', 'gho_secret', 'ghr_secret', 'read:user')`,
+      ],
+      "write",
+    );
+
+    await migrate(drizzle(client), { migrationsFolder });
+
+    const account = await client.execute("select access_token, refresh_token, provider_account_id, scope from account");
+    assert.deepEqual({ ...account.rows[0] }, { access_token: null, refresh_token: null, provider_account_id: "123", scope: "read:user" });
+    const user = await client.execute("select session_version from user where id = 'owner'");
+    assert.equal(Number(user.rows[0]?.session_version), 0);
+  } finally {
+    client.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 import { isValidTimeZone, parseISODate } from "@/lib/date";
+import { isAllowedPushEndpoint } from "@/lib/push-endpoints";
+
+// Zod compiles validators with Function() when it can, and probes for that on first use.
+// The CSP forbids eval (and Workers have none), so the probe only logs a CSP violation in
+// the browser: skip it.
+z.config({ jitless: true });
 
 export const MAX_NAME_LENGTH = 100;
 export const MAX_DESCRIPTION_LENGTH = 1_000;
@@ -77,7 +83,12 @@ export const reminderSettingsSchema = z
 
 export const pushSubscriptionSchema = z
   .object({
-    endpoint: z.string().url().startsWith("https://").max(2_048),
+    endpoint: z
+      .string()
+      .url()
+      .startsWith("https://")
+      .max(2_048)
+      .refine(isAllowedPushEndpoint, "Push endpoints must be a browser push service."),
     expirationTime: z.number().finite().nullable().optional(),
     keys: z
       .object({
@@ -94,3 +105,5 @@ export function boundedText(value: FormDataEntryValue | null, maximum: number): 
   const text = typeof value === "string" ? value.trim() : "";
   return text.slice(0, maximum);
 }
+
+export const pushEndpointSchema = z.string().max(2_048).refine(isAllowedPushEndpoint);

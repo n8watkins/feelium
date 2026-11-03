@@ -61,6 +61,8 @@ export const profiles = sqliteTable(
       .notNull()
       .default(false),
     weekStartsOn: integer("week_starts_on").notNull().default(1),
+    // When this account last sent a test reminder (rate limit, see TEST_PUSH_INTERVAL_MS).
+    lastTestPushAt: integer("last_test_push_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
