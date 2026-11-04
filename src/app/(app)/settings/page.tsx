@@ -67,7 +67,7 @@ export default async function SettingsPage() {
             </li>
             <SettingsRow title="Every device" detail="Ends sessions on phones and browsers you're not using now">
               <form method="post" action="/api/account/signout-everywhere">
-                <Button type="submit" variant="ghost" className="h-9 rounded-full px-4">
+                <Button type="submit" variant="outline" className="h-9 rounded-full px-4">
                   Log out on every device
                 </Button>
               </form>
