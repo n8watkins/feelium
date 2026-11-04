@@ -2,7 +2,7 @@
 
 import { Check, Pencil } from "lucide-react";
 import Link from "next/link";
-import { useOptimistic, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
@@ -53,14 +53,66 @@ export function BehaviorLogRow({
   );
 }
 
+type SaveState = "idle" | "saving" | "saved" | "failed";
+
+/**
+ * Runs a save as a transition and reports it: "saving" while it runs, "saved" for a moment
+ * after, "failed" (with a toast) when it throws, so every tap shows that it was kept.
+ */
+function useSave(name: string) {
+  const [isPending, startTransition] = useTransition();
+  const [result, setResult] = useState<"idle" | "saved" | "failed">("idle");
+  useEffect(() => {
+    if (result !== "saved") return;
+    const timer = setTimeout(() => setResult("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [result]);
+
+  function save(optimistic: () => void, write: () => Promise<unknown>) {
+    startTransition(async () => {
+      optimistic();
+      try {
+        await write();
+        setResult("saved");
+      } catch {
+        setResult("failed");
+        toast.error(`Couldn't save ${name}. Check your connection and try again.`);
+      }
+    });
+  }
+
+  const state: SaveState = isPending ? "saving" : result;
+  return { state, save };
+}
+
+function SaveStatus({ state }: { state: SaveState }) {
+  return (
+    <span role="status">
+      {state === "saving" ? <span className="text-muted-foreground"> · Saving…</span> : null}
+      {state === "saved" ? (
+        <>
+          {" · "}
+          <span className="inline-flex items-center gap-0.5 text-foreground">
+            <Check className="size-3" aria-hidden="true" />
+            Saved
+          </span>
+        </>
+      ) : null}
+      {state === "failed" ? <span className="text-red-700 dark:text-destructive"> · Not saved</span> : null}
+    </span>
+  );
+}
+
 function RowShell({
   name,
   status,
+  saveState,
   children,
   editHref,
 }: {
   name: string;
   status: string;
+  saveState: SaveState;
   children: React.ReactNode;
   editHref?: string;
 }) {
@@ -79,7 +131,10 @@ function RowShell({
             </Link>
           ) : null}
         </div>
-        <div className="text-xs text-muted-foreground">{status}</div>
+        <div className="text-xs text-muted-foreground">
+          {status}
+          <SaveStatus state={saveState} />
+        </div>
       </div>
       <div className="shrink-0">{children}</div>
     </li>
@@ -101,27 +156,23 @@ function BooleanControl({
     serverValue,
     (_current, next) => next,
   );
-  const [, startTransition] = useTransition();
+  const { state, save } = useSave(behavior.name);
 
   function choose(next: boolean | null) {
-    startTransition(async () => {
-      setValue(next);
-      try {
-        if (next === null) {
-          await clearBehaviorEntryAction(behavior.id, entryDate);
-        } else {
-          await setBehaviorBooleanAction(behavior.id, next, entryDate);
-        }
-      } catch {
-        toast.error(`Couldn't save ${behavior.name}. Reverted.`);
-      }
-    });
+    save(
+      () => setValue(next),
+      () =>
+        next === null
+          ? clearBehaviorEntryAction(behavior.id, entryDate)
+          : setBehaviorBooleanAction(behavior.id, next, entryDate),
+    );
   }
 
   return (
     <RowShell
       name={behavior.name}
       status={value === null ? "Not recorded" : value ? "Did it" : "Didn't"}
+      saveState={state}
       editHref={editHref}
     >
       <div
@@ -186,27 +237,23 @@ function NumericControl({
     serverValue,
     (_current, next) => next,
   );
-  const [, startTransition] = useTransition();
+  const { state, save } = useSave(behavior.name);
 
   function commit(next: number | null) {
-    startTransition(async () => {
-      setValue(next);
-      try {
-        if (next === null) {
-          await clearBehaviorEntryAction(behavior.id, entryDate);
-        } else {
-          await setBehaviorNumericAction(behavior.id, next, entryDate);
-        }
-      } catch {
-        toast.error(`Couldn't save ${behavior.name}. Reverted.`);
-      }
-    });
+    save(
+      () => setValue(next),
+      () =>
+        next === null
+          ? clearBehaviorEntryAction(behavior.id, entryDate)
+          : setBehaviorNumericAction(behavior.id, next, entryDate),
+    );
   }
 
   return (
     <RowShell
       name={behavior.name}
       status={value === null ? "Not recorded" : "Recorded"}
+      saveState={state}
       editHref={editHref}
     >
       <NumericStepper

@@ -2,7 +2,7 @@
 
 import { Check, Plus, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
   createCheckInAction,
@@ -67,6 +67,24 @@ export function CheckInForm({
   const [note, setNote] = useState(initialNote);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // A draft differs from what's stored: it shows "Not saved yet" and guards a page close.
+  const dirty =
+    outcomes.some((o) => {
+      const now = answers[o.id];
+      const was = initialAnswers?.[o.id] ?? EMPTY;
+      return now.rating !== was.rating || now.boolean !== was.boolean || now.numeric !== was.numeric;
+    }) ||
+    newTagNames.length > 0 ||
+    selectedTagIds.length !== initialTagIds.length ||
+    selectedTagIds.some((id) => !initialTagIds.includes(id)) ||
+    note !== initialNote;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   function patch(id: string, next: Partial<Answer>) {
     setAnswers((prev) => ({ ...prev, [id]: { ...prev[id], ...next } }));
@@ -229,9 +247,14 @@ export function CheckInForm({
       ) : null}
       {/* On phones Save stays reachable above the tab bar while the form scrolls. */}
       <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 bg-gradient-to-t from-background from-60% to-transparent px-4 pt-6 pb-3 md:static md:mx-0 md:bg-none md:p-0">
-        <Button type="submit" size="lg" className="h-12 w-full rounded-full text-[15px] md:w-auto md:px-10" disabled={isPending}>
-          {isPending ? "Saving…" : checkInId ? "Save changes" : "Save check-in"}
-        </Button>
+        <div className="flex flex-col items-center gap-2 md:flex-row md:gap-4">
+          <Button type="submit" size="lg" className="h-12 w-full rounded-full text-[15px] md:w-auto md:px-10" disabled={isPending}>
+            {isPending ? "Saving…" : checkInId ? "Save changes" : "Save check-in"}
+          </Button>
+          <p role="status" className="text-xs text-muted-foreground empty:hidden">
+            {dirty && !isPending ? (checkInId ? "Unsaved changes" : "Not saved yet") : ""}
+          </p>
+        </div>
       </div>
     </form>
   );
