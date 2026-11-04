@@ -181,6 +181,23 @@ function inWindow(dateISO: string, startISO: string | null, today: string): bool
   return true;
 }
 
+/** At most this many days in a day-by-day strip or grid (the 90-day range plus today). */
+export const MAX_STRIP_DAYS = 91;
+
+export type DayValue<T> = { date: string; value: T | null };
+
+/**
+ * The window's days, oldest first, ending today, at most MAX_STRIP_DAYS long, each with
+ * its recorded value or null. Feeds the day-by-day views.
+ */
+function dayStrip<T>(today: string, windowDays: number, byDate: Map<string, T>): DayValue<T>[] {
+  const count = Math.min(Math.max(windowDays, 1), MAX_STRIP_DAYS);
+  return Array.from({ length: count }, (_, i) => {
+    const date = addDaysISO(today, i - (count - 1));
+    return { date, value: byDate.get(date) ?? null };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Trend (PRD 16.2/16.3 "basic trend over time") - deliberately not correlation math
 // ---------------------------------------------------------------------------
@@ -285,6 +302,7 @@ export type BooleanBehaviorStats = {
   windowDays: number;
   percentOccurred: number | null; // yes / recorded * 100 (recorded-only denominator)
   trend: Trend;
+  days: DayValue<boolean>[];
 };
 
 export type NumericBehaviorStats = {
@@ -300,6 +318,7 @@ export type NumericBehaviorStats = {
   max: number | null;
   unit: string | null;
   trend: Trend;
+  days: DayValue<number>[];
 };
 
 export type BehaviorStats = BooleanBehaviorStats | NumericBehaviorStats;
@@ -338,6 +357,7 @@ function computeBooleanBehavior(
     windowDays,
     percentOccurred: recordedDays > 0 ? (yesDays / recordedDays) * 100 : null,
     trend: buildTrend(points, startISO, today, 0.15, { min: 0, max: 1 }),
+    days: dayStrip(today, windowDays, byDate),
   };
 }
 
@@ -377,6 +397,7 @@ function computeNumericBehavior(
       min: min ?? 0,
       max: max ?? 1,
     }),
+    days: dayStrip(today, windowDays, byDate),
   };
 }
 
@@ -400,6 +421,8 @@ export type OutcomeStats = {
   yesDays: number;
   noDays: number;
   trend: Trend;
+  /** Each day's value (the day's average; booleans 1 or 0), for the day-by-day grid. */
+  days: DayValue<number>[];
 };
 
 /** A day's collapsed value for one outcome (PRD 16.6: several check-ins -> daily average). */
@@ -443,6 +466,7 @@ function computeOutcome(
   rows: OutcomeValueRow[],
   startISO: string | null,
   today: string,
+  windowDays: number,
 ): OutcomeStats {
   const kind = outcome.inputType;
   const windowRows = rows.filter((r) => inWindow(r.localDate, startISO, today));
@@ -497,6 +521,7 @@ function computeOutcome(
       min: lowest ?? (kind === "rating" ? 1 : 0),
       max: highest ?? (kind === "rating" ? 5 : 1),
     }),
+    days: dayStrip(today, windowDays, new Map(dailyValues.map((p) => [p.date, p.value]))),
   };
 }
 
@@ -734,7 +759,7 @@ export function computeInsights(input: InsightsInput): InsightsData {
     .filter((s) => s.hasData);
 
   const outcomeStats: OutcomeStats[] = outcomes
-    .map((o) => computeOutcome(o, valuesByOutcome.get(o.id) ?? [], startISO, today))
+    .map((o) => computeOutcome(o, valuesByOutcome.get(o.id) ?? [], startISO, today, windowDays))
     .filter((s) => s.hasData);
 
   // Comparisons: every behavior vs every outcome that has data. Boolean behaviors use a
