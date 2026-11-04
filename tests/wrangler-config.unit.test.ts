@@ -23,3 +23,7 @@ test("secrets stay out of the plain variables and are listed in .dev.vars.exampl
     assert.match(example, new RegExp(`^${name}=$`, "m"));
   }
 });
+
+test("the bundle keeps no esbuild __name() wrappers, which break next-themes' inline script", () => {
+  assert.equal(config.keep_names, false);
+});
