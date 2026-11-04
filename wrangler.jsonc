@@ -8,6 +8,10 @@
   "compatibility_date": "2026-11-01",
   // nodejs_compat is required by @opennextjs/cloudflare, and web-push uses node:crypto and node:https.
   "compatibility_flags": ["nodejs_compat"],
+  // Don't wrap functions in esbuild's __name() helper. next-themes stringifies its
+  // theme function into an inline script, and __name doesn't exist in the browser, so the
+  // theme failed to apply before first paint (dark mode flashed light).
+  "keep_names": false,
   // Served at https://feelium.n8builds.dev (a custom domain attached to this
   // Worker in the dashboard) and at feelium.<account>.workers.dev.
   "workers_dev": true,
