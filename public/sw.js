@@ -11,7 +11,7 @@
  * stale or wrong-user view. Only same-origin static assets are cached.
  */
 
-const CACHE_VERSION = "v2"; // v2: the three-tone logo replaced the bar-chart icons
+const CACHE_VERSION = "v3"; // v3: the redesign (reminders open Today at #checkin)
 const CACHE_NAME = `bt-static-${CACHE_VERSION}`;
 
 // Small, stable app-shell assets worth precaching. Hashed /_next/static/* chunks are
@@ -19,7 +19,7 @@ const CACHE_NAME = `bt-static-${CACHE_VERSION}`;
 const PRECACHE_URLS = ["/icon.svg", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest"];
 
 // Where a tapped notification should land. PRD 17: tapping opens the check-in screen.
-const DEFAULT_NOTIFICATION_URL = "/checkin/new";
+const DEFAULT_NOTIFICATION_URL = "/today#checkin";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

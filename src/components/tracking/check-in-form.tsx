@@ -117,114 +117,120 @@ export function CheckInForm({
   }
 
   return (
-    <form action={save} className="space-y-8">
-      <section className="space-y-4" aria-labelledby="outcomes-heading">
-        <h2 id="outcomes-heading" className="text-sm font-medium text-muted-foreground">
-          How do you feel?
-        </h2>
+    <form action={save} className="space-y-4">
+      <div className="divide-y divide-border rounded-3xl border border-border px-5 md:px-6">
         {outcomes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No outcomes yet - add one to record how you feel.
+          <p className="py-5 text-sm text-muted-foreground">
+            No feelings to rate yet. Add one to record how you feel.
           </p>
         ) : (
-          <ul className="space-y-4">
-            {outcomes.map((outcome) => (
-              <li key={outcome.id} className="space-y-2">
-                <span className="text-sm font-medium">{outcome.name}</span>
-                <OutcomeControl
-                  outcome={outcome}
-                  answer={answers[outcome.id]}
-                  onChange={(next) => patch(outcome.id, next)}
-                />
-              </li>
-            ))}
-          </ul>
+          outcomes.map((outcome) => (
+            <div key={outcome.id} className="py-5">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <span className="text-[15px] font-medium" id={`outcome-${outcome.id}`}>
+                  {outcome.name}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {answerLabel(outcome, answers[outcome.id])}
+                </span>
+              </div>
+              <OutcomeControl
+                outcome={outcome}
+                answer={answers[outcome.id]}
+                onChange={(next) => patch(outcome.id, next)}
+              />
+            </div>
+          ))
         )}
-        {outcomes.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Leave anything blank - unanswered outcomes stay unknown.
-          </p>
-        ) : null}
-        {/* Mirror the inline "add a tag" affordance: add a new outcome and come back here. */}
-        <Button asChild variant="outline" className="w-full">
-          <Link
-            href={`/settings/outcomes/new?from=${encodeURIComponent(
-              checkInId ? `/checkin/${checkInId}` : "/checkin/new",
-            )}`}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            Add outcome
-          </Link>
-        </Button>
-      </section>
 
-      <section className="space-y-3" aria-labelledby="tags-heading">
-        <h2 id="tags-heading" className="text-sm font-medium text-muted-foreground">
-          Tags <span className="font-normal">(optional)</span>
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <TagChip
-              key={tag.id}
-              label={tag.name}
-              selected={selectedTagIds.includes(tag.id)}
-              onClick={() => toggleTag(tag.id)}
+        <div className="py-5" role="group" aria-labelledby="tags-heading">
+          <h3 id="tags-heading" className="mb-3 text-[15px] font-medium">
+            Tags <span className="font-normal text-muted-foreground">(optional)</span>
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <TagChip
+                key={tag.id}
+                label={tag.name}
+                selected={selectedTagIds.includes(tag.id)}
+                onClick={() => toggleTag(tag.id)}
+              />
+            ))}
+            {newTagNames.map((name) => (
+              <TagChip
+                key={`new-${name}`}
+                label={name}
+                selected
+                onClick={() => setNewTagNames((prev) => prev.filter((n) => n !== name))}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTag();
+                }
+              }}
+              placeholder="New tag"
+              maxLength={MAX_NAME_LENGTH}
+              aria-label="Add a tag"
+              className="h-10 rounded-full px-4"
             />
-          ))}
-          {newTagNames.map((name) => (
-            <TagChip
-              key={`new-${name}`}
-              label={name}
-              selected
-              onClick={() =>
-                setNewTagNames((prev) => prev.filter((n) => n !== name))
-              }
-            />
-          ))}
+            <Button type="button" variant="outline" className="h-10 rounded-full px-5" onClick={addTag}>
+              Add
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Input
-            value={tagDraft}
-            onChange={(e) => setTagDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-            placeholder="Add a tag"
-            maxLength={MAX_NAME_LENGTH}
-            aria-label="Add a tag"
+
+        <div className="py-5">
+          <Label htmlFor="note" className="mb-3 text-[15px] font-medium">
+            Note <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Textarea
+            id="note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Anything worth remembering?"
+            maxLength={MAX_NOTE_LENGTH}
+            className="min-h-20 resize-none rounded-2xl border-transparent bg-muted px-4 py-3 text-[15px] shadow-none"
           />
-          <Button type="button" variant="outline" onClick={addTag}>
-            Add
-          </Button>
         </div>
-      </section>
+      </div>
 
-      <section className="space-y-2">
-        <Label htmlFor="note">
-          Note <span className="text-muted-foreground">(optional)</span>
-        </Label>
-        <Textarea
-          id="note"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Anything worth remembering?"
-          maxLength={MAX_NOTE_LENGTH}
-        />
-      </section>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
+        <span>Leave anything blank: it stays unknown, never zero.</span>
+        <Link
+          href={`/settings/outcomes/new?from=${encodeURIComponent(checkInId ? `/checkin/${checkInId}` : "/today")}`}
+          className="inline-flex min-h-9 items-center gap-1 font-medium hover:text-foreground"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          Add a feeling to rate
+        </Link>
+      </div>
 
       {error ? (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-red-700 dark:text-destructive">
           {error}
         </p>
       ) : null}
-      <Button type="submit" size="lg" className="h-12 w-full" disabled={isPending}>
-        {isPending ? "Saving…" : checkInId ? "Save changes" : "Save check-in"}
-      </Button>
+      {/* On phones Save stays reachable above the tab bar while the form scrolls. */}
+      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 bg-gradient-to-t from-background from-60% to-transparent px-4 pt-6 pb-3 md:static md:mx-0 md:bg-none md:p-0">
+        <Button type="submit" size="lg" className="h-12 w-full rounded-full text-[15px] md:w-auto md:px-10" disabled={isPending}>
+          {isPending ? "Saving…" : checkInId ? "Save changes" : "Save check-in"}
+        </Button>
+      </div>
     </form>
   );
+}
+
+function answerLabel(outcome: OutcomeForForm, answer: Answer): string {
+  if (outcome.inputType === "rating") return answer.rating == null ? "Skipped" : `${answer.rating} of 5`;
+  if (outcome.inputType === "boolean") return answer.boolean == null ? "Skipped" : answer.boolean ? "Yes" : "No";
+  return answer.numeric == null ? "Skipped" : `${answer.numeric}${outcome.unit ? ` ${outcome.unit}` : ""}`;
 }
 
 function OutcomeControl({
@@ -245,7 +251,7 @@ function OutcomeControl({
           role="group"
           aria-label={outcome.name}
           aria-describedby={anchorsId}
-          className="flex gap-2"
+          className="grid grid-cols-5 gap-2"
         >
           {[1, 2, 3, 4, 5].map((n) => (
             <button
@@ -255,10 +261,10 @@ function OutcomeControl({
               aria-label={`${n} out of 5`}
               onClick={() => onChange({ rating: answer.rating === n ? null : n })}
               className={cn(
-                "flex h-12 flex-1 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex h-12 items-center justify-center rounded-2xl text-base font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 answer.rating === n
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background hover:bg-accent",
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground hover:bg-accent dark:hover:bg-secondary",
               )}
             >
               {n}
@@ -268,13 +274,11 @@ function OutcomeControl({
         {/* Anchor the bare 1-5 with meaning and (when set) the desired direction. */}
         <div
           id={anchorsId}
-          className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+          className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"
         >
-          <span>1 · {anchors.low}</span>
-          {anchors.hint ? (
-            <span className="font-medium text-foreground/70">{anchors.hint}</span>
-          ) : null}
-          <span>{anchors.high} · 5</span>
+          <span>{anchors.low}</span>
+          {anchors.hint ? <span className="sr-only">{anchors.hint}</span> : null}
+          <span>{anchors.high}</span>
         </div>
       </div>
     );
@@ -295,10 +299,10 @@ function OutcomeControl({
               onChange({ boolean: answer.boolean === val ? null : val })
             }
             className={cn(
-              "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               answer.boolean === val
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background hover:bg-accent",
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground hover:bg-accent dark:hover:bg-secondary",
             )}
           >
             {answer.boolean === val ? (
@@ -337,7 +341,7 @@ function TagChip({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex min-h-9 items-center gap-1 rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         selected
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-background hover:bg-accent",

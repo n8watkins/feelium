@@ -1,18 +1,27 @@
-import { BarChart3, CalendarDays, Home, Settings, type LucideIcon } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+
+import { InsightsIcon, SettingsIcon, TodayIcon } from "@/components/nav-icons";
 
 export type NavItem = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Other paths that belong to this tab (History and its days live under Today). */
+  also?: string[];
 };
 
 /**
- * Primary information architecture, shared by the mobile bottom navigation and the
- * desktop sidebar so both stay in sync (PRD 10.1).
+ * Primary navigation: three tabs, in the desktop top bar and the phone's bottom bar.
+ * History folds into Today ("Earlier today", "All days") and Insights (day by day).
  */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/today", label: "Today", icon: Home },
-  { href: "/history", label: "History", icon: CalendarDays },
-  { href: "/insights", label: "Insights", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/today", label: "Today", icon: TodayIcon, also: ["/history", "/checkin"] },
+  { href: "/insights", label: "Insights", icon: InsightsIcon },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
+
+export function isActiveTab(item: NavItem, pathname: string): boolean {
+  return [item.href, ...(item.also ?? [])].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}

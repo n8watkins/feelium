@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -359,7 +359,8 @@ export async function getDayDetail(date: string): Promise<DayDetail> {
       .select()
       .from(checkIns)
       .where(and(eq(checkIns.userId, userId), eq(checkIns.localDate, date)))
-      .orderBy(asc(checkIns.occurredAt)),
+      // occurred_at has one-second precision: insertion order (rowid) breaks ties.
+      .orderBy(asc(checkIns.occurredAt), asc(sql`${checkIns}.rowid`)),
   ]);
 
   const entryByBehavior = new Map(entryRows.map((row) => [row.behaviorId, row]));

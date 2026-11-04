@@ -43,7 +43,7 @@ export const dynamic = "force-dynamic";
 
 const REMINDER_TITLE = "Ready for a quick check-in?";
 const REMINDER_BODY = "Take a moment to record what you did and how you felt.";
-const REMINDER_URL = "/checkin/new";
+const REMINDER_URL = "/today#checkin";
 const DEFAULT_WINDOW_MINUTES = 10;
 const MAX_CANDIDATES_PER_RUN = 100;
 const SEND_CONCURRENCY = 10;

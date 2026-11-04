@@ -27,7 +27,7 @@ import {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 /** The gentle reminder copy (PRD 17: no guilt/shame; tapping opens the check-in). */
-const REMINDER_URL = "/checkin/new";
+const REMINDER_URL = "/today#checkin";
 const REMINDER_TITLE = "Ready for a quick check-in?";
 
 /** Stores the browser's push subscription for the current user + device. */

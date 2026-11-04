@@ -77,7 +77,7 @@ export function NumericStepper({
               setEditing(false);
             }
           }}
-          className="h-12 flex-1 text-center text-lg font-semibold tabular-nums"
+          className="h-11 flex-1 rounded-full text-center text-lg font-semibold tabular-nums"
         />
         {unit ? (
           <span className="text-sm text-muted-foreground">{unit}</span>
@@ -90,9 +90,9 @@ export function NumericStepper({
     <div className="flex items-center gap-3">
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="icon"
-        className="size-12"
+        className="size-11 rounded-full"
         aria-label={`Decrease ${label}`}
         disabled={!recorded}
         onClick={() => onChange(Math.max(0, (value ?? 0) - 1))}
@@ -105,15 +105,15 @@ export function NumericStepper({
         aria-label={
           recorded ? `${label}: ${display}. Tap to edit` : `${label}: not recorded. Tap to enter a value`
         }
-        className="min-w-20 flex-1 rounded-md py-2 text-center text-lg font-semibold tabular-nums transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-w-16 flex-1 rounded-full py-2 text-center text-lg font-semibold tabular-nums transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {display}
       </button>
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="icon"
-        className="size-12"
+        className="size-11 rounded-full"
         aria-label={`Increase ${label}`}
         disabled={recorded && value >= MAX_NUMERIC_VALUE}
         onClick={() =>
@@ -127,7 +127,7 @@ export function NumericStepper({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-12"
+          className="size-11 rounded-full"
           aria-label={`Clear ${label}`}
           onClick={() => onChange(null)}
         >

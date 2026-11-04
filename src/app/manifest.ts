@@ -8,11 +8,16 @@ import { branding } from "@/config/branding";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    // A stable identity and scope, opening on Today like a native app.
+    id: "/today",
+    scope: "/",
     name: branding.manifest.name,
     short_name: branding.manifest.shortName,
     description: branding.manifest.description,
     start_url: branding.manifest.startUrl,
     display: branding.manifest.display,
+    display_override: ["standalone"],
+    orientation: "portrait",
     background_color: branding.manifest.backgroundColor,
     theme_color: branding.manifest.themeColor,
     icons: branding.manifest.icons.map((icon) => ({

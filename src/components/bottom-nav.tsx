@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { NAV_ITEMS } from "@/lib/nav";
+import { isActiveTab, NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
- * Mobile bottom navigation (PRD 10.1). Fixed to the bottom with iOS safe-area padding
- * and large (>= 44px) tap targets. Hidden on desktop, where the sidebar is used instead.
+ * The phone's bottom tab bar: three tabs, 64px tall above the home indicator
+ * (safe-area padding), hidden from md up where the top bar holds the tabs.
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -16,25 +16,23 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur md:hidden pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className="mx-auto flex max-w-md items-stretch justify-around">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+      <ul className="mx-auto grid max-w-md grid-cols-3">
+        {NAV_ITEMS.map((item) => {
+          const active = isActiveTab(item, pathname);
           return (
-            <li key={href} className="flex-1">
+            <li key={item.href}>
               <Link
-                href={href}
+                href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors",
-                  active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                  "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="size-6" aria-hidden="true" />
-                <span>{label}</span>
+                <item.icon className="size-[22px]" />
+                {item.label}
               </Link>
             </li>
           );

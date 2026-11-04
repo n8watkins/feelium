@@ -27,8 +27,61 @@ export const metadata: Metadata = {
   applicationName: branding.appName,
   appleWebApp: {
     capable: true,
+    // "default": dark text on the light status bar; iOS switches it to light text in dark mode.
     statusBarStyle: "default",
     title: branding.appShortName,
+    // Launch screens in the app's own light and dark backgrounds
+    // (scripts/generate-splash.mjs), so the installed app never flashes white.
+    startupImage: [
+      {
+        url: "/splash/1290x2796-light.png",
+        media: "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/1290x2796-dark.png",
+        media: "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+      {
+        url: "/splash/1179x2556-light.png",
+        media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/1179x2556-dark.png",
+        media: "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+      {
+        url: "/splash/1170x2532-light.png",
+        media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/1170x2532-dark.png",
+        media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+      {
+        url: "/splash/750x1334-light.png",
+        media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/750x1334-dark.png",
+        media: "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+      {
+        url: "/splash/1640x2360-light.png",
+        media: "(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/1640x2360-dark.png",
+        media: "(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+      {
+        url: "/splash/1668x2388-light.png",
+        media: "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)",
+      },
+      {
+        url: "/splash/1668x2388-dark.png",
+        media: "(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)",
+      },
+    ],
   },
 };
 
