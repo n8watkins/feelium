@@ -110,7 +110,8 @@ export const config = {
      * - api (Auth.js handlers live under /api/auth and must not be guarded)
      * - _next/static, _next/image, favicon, manifest, icon, and image assets
      * - sw.js (the PWA service worker must be publicly fetchable, not redirected to login)
+     * - opengraph-image, twitter-image and og/ (link-preview crawlers have no session)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon.svg|opengraph-image|twitter-image|og/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
