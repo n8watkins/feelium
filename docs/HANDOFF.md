@@ -198,6 +198,15 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
   It queries a bounded due queue, uses timezone-aware and daylight-saving-safe occurrences, retries transient failures fairly, bounds stalled push requests, and prunes dead subscriptions.
   Full detail is in `docs/notifications-and-pwa.md`.
 
+### Errors, analytics and not-found
+
+- The route guard (`src/proxy.ts`) only guards the app's own screens (`src/lib/app-paths.ts`), so an unknown path gets the styled 404 with a real 404 status, signed in or not.
+- Error pages offer Try again and a way home: `(app)/error.tsx` inside the app, `error.tsx` for public pages, and `global-error.tsx` when the root layout itself fails.
+- Cloudflare Web Analytics (cookie-free) loads only when the `CF_WEB_ANALYTICS_TOKEN` Worker variable is set (it is, in `wrangler.jsonc`); the script carries the CSP nonce and the policy allows its beacon host.
+- Sentry reports browser and Worker errors only when the `SENTRY_DSN` Worker secret is set: `npx wrangler secret put SENTRY_DSN`.
+  Events carry no user, IP, cookies, headers, bodies or query strings (`src/lib/error-reporting.ts`), all errors are sent and 5% of requests are traced.
+  Source maps are not uploaded yet.
+
 ### Account / privacy
 
 - JSON export route (`/api/account/export`), guarded against a stale JWT for a deleted user.

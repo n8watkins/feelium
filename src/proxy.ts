@@ -7,6 +7,8 @@ import {
 } from "next/server";
 
 import authConfig from "@/auth.config";
+import { isAppPath } from "@/lib/app-paths";
+import { sentryOrigin } from "@/lib/error-reporting";
 import { buildContentSecurityPolicy } from "@/lib/security-headers";
 
 // Next.js 16 proxy (renamed middleware). Uses the dependency-light auth config so this
@@ -33,7 +35,10 @@ const authMiddleware = auth((req) => {
     return NextResponse.next({ request: { headers: req.headers } });
   }
 
-  if (!isLoggedIn) {
+  // Only the app's own screens need a session. Anything else falls through to the
+  // router, so an unknown path gets the styled 404 with a real 404 status instead of a
+  // detour through sign-in.
+  if (!isLoggedIn && isAppPath(req.nextUrl.pathname)) {
     const loginUrl = new URL("/login", req.nextUrl);
     loginUrl.searchParams.set("next", `${req.nextUrl.pathname}${req.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
@@ -76,6 +81,10 @@ export default async function proxy(request: NextRequest, event: NextFetchEvent)
   const contentSecurityPolicy = buildContentSecurityPolicy(
     nonce,
     process.env.NODE_ENV === "development",
+    {
+      webAnalytics: Boolean(process.env.CF_WEB_ANALYTICS_TOKEN),
+      sentryOrigin: sentryOrigin(process.env.SENTRY_DSN),
+    },
   );
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
