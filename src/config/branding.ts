@@ -12,6 +12,9 @@ const APP_NAME = "feelium";
 /** Short name used where space is tight (PWA home-screen label, headers). */
 const APP_SHORT_NAME = "feelium";
 
+/** Public address, the base for absolute URLs such as the share image. */
+const APP_URL = "https://feelium.n8builds.dev";
+
 /** One-line description of what the product does. */
 const APP_DESCRIPTION =
   "A personal tracker for connecting what you do with how you feel.";
@@ -49,6 +52,7 @@ const MANIFEST_ICONS: BrandIcon[] = [
 
 export const branding = {
   appName: APP_NAME,
+  appUrl: APP_URL,
   appShortName: APP_SHORT_NAME,
   appDescription: APP_DESCRIPTION,
 

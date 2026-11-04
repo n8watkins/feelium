@@ -22,6 +22,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Absolute base so the share image (app/opengraph-image.tsx) resolves in unfurls.
+  metadataBase: new URL(branding.appUrl),
+  openGraph: {
+    type: "website",
+    siteName: branding.appName,
+    title: branding.appName,
+    description: branding.appDescription,
+    url: "/",
+  },
+  twitter: { card: "summary_large_image", title: branding.appName, description: branding.appDescription },
   title: {
     default: branding.appName,
     template: `%s · ${branding.appName}`,
