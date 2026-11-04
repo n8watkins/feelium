@@ -15,6 +15,13 @@ import {
   listTags,
 } from "@/server/data";
 
+const SECTIONS = [
+  { id: "account", title: "Account" },
+  { id: "tracking", title: "What you track" },
+  { id: "reminders", title: "Reminders" },
+  { id: "preferences", title: "Preferences" },
+  { id: "data", title: "Your data" },
+];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
@@ -41,7 +48,23 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      <div className="grid gap-10 px-4 md:px-8">
+      {/* On laptops a section list sits on the left and stays put while the right side scrolls. */}
+      <div data-wide className="px-4 md:px-8 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
+        <nav aria-label="Settings sections" className="hidden lg:block">
+          <ul className="sticky top-24 -ml-3 space-y-1 text-sm">
+            {SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a
+                  href={`#${section.id}`}
+                  className="flex min-h-10 items-center rounded-xl px-3 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {section.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      <div className="grid max-w-3xl gap-10">
         <Section id="account" title="Account">
           <SettingsGroup>
             <li className="flex flex-wrap items-center gap-4 px-5 py-4">
@@ -127,6 +150,7 @@ export default async function SettingsPage() {
             <SettingsLink href="/settings/data" title="Delete data or account" detail="Clear your tracking data, or remove everything" />
           </SettingsGroup>
         </Section>
+      </div>
       </div>
     </>
   );

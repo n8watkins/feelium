@@ -85,7 +85,8 @@ export default async function TodayPage({
           </p>
         }
       />
-      <div className="grid gap-12 px-4 md:px-8">
+      {/* Wide on laptops: the check-in on the left, what you did and earlier on the right. */}
+      <div data-wide className="grid items-start gap-12 px-4 md:px-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-10">
         <Section
           id="checkin"
           title="How do you feel right now?"
@@ -106,6 +107,7 @@ export default async function TodayPage({
           />
           <CheckInSaved justSaved={checkin === "saved"} />
         </Section>
+        <div className="grid gap-12">
 
         <Section
           id="behaviors"
@@ -139,7 +141,7 @@ export default async function TodayPage({
                         <span className="text-xs font-medium text-muted-foreground">Uncategorized</span>
                       )}
                     </h3>
-                    <ul className="grid gap-2 md:grid-cols-2">
+                    <ul className="grid gap-2 md:grid-cols-2 lg:grid-cols-1">
                       {group.behaviors.map((behavior) => {
                         const entry = entries.get(behavior.id);
                         return (
@@ -215,6 +217,7 @@ export default async function TodayPage({
             </ol>
           )}
         </Section>
+        </div>
       </div>
     </>
   );

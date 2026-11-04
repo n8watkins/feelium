@@ -136,20 +136,23 @@ export function CheckInForm({
 
   return (
     <form action={save} className="space-y-4">
-      <div className="divide-y divide-border rounded-3xl border border-border px-5 md:px-6">
+      <div className="divide-y divide-border rounded-3xl border border-border px-4 md:px-6">
         {outcomes.length === 0 ? (
           <p className="py-5 text-sm text-muted-foreground">
             No feelings to rate yet. Add one to record how you feel.
           </p>
         ) : (
           outcomes.map((outcome) => (
-            <div key={outcome.id} className="py-5">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <span className="text-[15px] font-medium" id={`outcome-${outcome.id}`}>
+            // One quiet line per feeling: the name and what you chose on the left, the control on the right.
+            <div key={outcome.id} className="flex items-center justify-between gap-3 py-3 md:gap-4">
+              <div className="min-w-0">
+                <span className="block truncate text-[15px] font-medium" id={`outcome-${outcome.id}`}>
                   {outcome.name}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {answerLabel(outcome, answers[outcome.id])}
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {outcome.inputType === "rating" && answers[outcome.id].rating == null
+                    ? `1 ${ratingAnchors(outcome.desiredDirection).low.toLowerCase()} · 5 ${ratingAnchors(outcome.desiredDirection).high.toLowerCase()}`
+                    : answerLabel(outcome, answers[outcome.id])}
                 </span>
               </div>
               <OutcomeControl
@@ -277,49 +280,40 @@ function OutcomeControl({
 }) {
   if (outcome.inputType === "rating") {
     const anchors = ratingAnchors(outcome.desiredDirection);
-    const anchorsId = `rating-anchors-${outcome.id}`;
     return (
-      <div className="space-y-1.5">
-        <div
-          role="group"
-          aria-label={outcome.name}
-          aria-describedby={anchorsId}
-          className="grid grid-cols-5 gap-2"
-        >
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-pressed={answer.rating === n}
-              aria-label={`${n} out of 5`}
-              onClick={() => onChange({ rating: answer.rating === n ? null : n })}
-              className={cn(
-                "flex h-12 items-center justify-center rounded-2xl text-base font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                answer.rating === n
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground hover:bg-accent dark:hover:bg-secondary",
-              )}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        {/* Anchor the bare 1-5 with meaning and (when set) the desired direction. */}
-        <div
-          id={anchorsId}
-          className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground"
-        >
-          <span>{anchors.low}</span>
-          {anchors.hint ? <span className="sr-only">{anchors.hint}</span> : null}
-          <span>{anchors.high}</span>
-        </div>
+      <div
+        role="group"
+        aria-label={outcome.name}
+        aria-describedby={`rating-anchors-${outcome.id}`}
+        className="flex shrink-0 gap-1 md:gap-1.5"
+      >
+        <span id={`rating-anchors-${outcome.id}`} className="sr-only">
+          {`1 is ${anchors.low.toLowerCase()}, 5 is ${anchors.high.toLowerCase()}`}
+        </span>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={answer.rating === n}
+            aria-label={`${n} out of 5`}
+            onClick={() => onChange({ rating: answer.rating === n ? null : n })}
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:size-11",
+              answer.rating === n
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-secondary",
+            )}
+          >
+            {n}
+          </button>
+        ))}
       </div>
     );
   }
 
   if (outcome.inputType === "boolean") {
     return (
-      <div role="group" aria-label={outcome.name} className="grid grid-cols-2 gap-2">
+      <div role="group" aria-label={outcome.name} className="flex shrink-0 rounded-full bg-muted p-1">
         {[
           { label: "No", val: false },
           { label: "Yes", val: true },
@@ -328,19 +322,15 @@ function OutcomeControl({
             key={label}
             type="button"
             aria-pressed={answer.boolean === val}
-            onClick={() =>
-              onChange({ boolean: answer.boolean === val ? null : val })
-            }
+            onClick={() => onChange({ boolean: answer.boolean === val ? null : val })}
             className={cn(
-              "inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "inline-flex h-9 min-w-14 items-center justify-center gap-1 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               answer.boolean === val
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground hover:bg-accent dark:hover:bg-secondary",
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {answer.boolean === val ? (
-              <Check className="size-4" aria-hidden="true" />
-            ) : null}
+            {answer.boolean === val ? <Check className="size-3.5" aria-hidden="true" /> : null}
             {label}
           </button>
         ))}

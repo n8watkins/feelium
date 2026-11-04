@@ -143,6 +143,8 @@ export type StarterOutcome = {
   name: string;
   inputType: OutcomeInputType;
   desiredDirection: OutcomeDirection;
+  /** Offered but left off unless the user ticks it, so a first check-in stays short. */
+  optional?: boolean;
 };
 
 export const STARTER_BEHAVIORS: StarterBehavior[] = [
@@ -154,7 +156,7 @@ export const STARTER_BEHAVIORS: StarterBehavior[] = [
 
 export const STARTER_OUTCOMES: StarterOutcome[] = [
   { name: "Mood", inputType: "rating", desiredDirection: "higher_is_better" },
-  { name: "Anxiety", inputType: "rating", desiredDirection: "lower_is_better" },
   { name: "Energy", inputType: "rating", desiredDirection: "higher_is_better" },
-  { name: "Focus", inputType: "rating", desiredDirection: "higher_is_better" },
+  { name: "Anxiety", inputType: "rating", desiredDirection: "lower_is_better", optional: true },
+  { name: "Focus", inputType: "rating", desiredDirection: "higher_is_better", optional: true },
 ];

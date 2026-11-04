@@ -24,7 +24,10 @@ async function alreadySetUp(): Promise<boolean> {
 /** Path 1: accept the suggested set as-is. */
 export async function useSuggestedSetupAction(formData: FormData) {
   if (!(await alreadySetUp())) {
-    await createStarterItems(STARTER_BEHAVIORS, STARTER_OUTCOMES);
+    await createStarterItems(
+      STARTER_BEHAVIORS,
+      STARTER_OUTCOMES.filter((outcome) => !outcome.optional),
+    );
   }
   const timezone = String(formData.get("timezone") ?? "");
   if (isValidTimeZone(timezone)) await updateProfileTimeZone(timezone);

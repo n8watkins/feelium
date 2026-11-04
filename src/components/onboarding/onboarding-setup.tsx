@@ -43,7 +43,8 @@ export function OnboardingSetup() {
             <CardTitle>Use the suggested set</CardTitle>
             <CardDescription>
               Start with {STARTER_BEHAVIORS.map((b) => b.name).join(", ")} and{" "}
-              {STARTER_OUTCOMES.map((o) => o.name).join(", ")}.
+              {STARTER_OUTCOMES.filter((o) => !o.optional).map((o) => o.name).join(" and ")}. Add more
+              feelings anytime.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -72,7 +73,7 @@ export function OnboardingSetup() {
           <CardHeader>
             <CardTitle>Start from scratch</CardTitle>
             <CardDescription>
-              Build your own behaviors and outcomes in Settings.
+              Build your own behaviors and feelings in Settings.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -114,7 +115,7 @@ export function OnboardingSetup() {
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="text-sm font-medium">Outcomes</legend>
+        <legend className="text-sm font-medium">Feelings</legend>
         <ul className="space-y-2">
           {STARTER_OUTCOMES.map((outcome, index) => (
             <li
@@ -124,7 +125,7 @@ export function OnboardingSetup() {
               <Checkbox
                 id={`outcome-${index}`}
                 name={`outcome-${index}-included`}
-                defaultChecked
+                defaultChecked={!outcome.optional}
                 aria-label={`Include ${outcome.name}`}
               />
               <Input
