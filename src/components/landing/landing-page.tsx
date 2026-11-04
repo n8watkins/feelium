@@ -139,8 +139,9 @@ export function LandingPage() {
             <p className="mt-2 max-w-2xl text-muted-foreground">
               Real screens from the app, with a sample month of data.
             </p>
-            <div className="mt-10">
-              <Browser src="/welcome/desktop-today.png" alt="Today on a laptop: the check-in, what you did today and earlier check-ins" />
+            {/* Laptop mockups only where they're legible; phones see the phone screens below. */}
+            <div className="mt-10 hidden md:block">
+              <Browser src="/welcome/desktop-today.png" alt="Today on a laptop: a check-in with mood 4, anxiety 2, energy 3 and focus 4" />
             </div>
             <ul className="mt-10 grid grid-cols-2 gap-6 md:grid-cols-4">
               {IN_USE.map((shot) => (
@@ -197,7 +198,12 @@ export function LandingPage() {
 
         <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:px-8">
           <div className="min-w-0">
-            <Browser src="/welcome/desktop-insights.png" alt="Insights on a laptop comparing how you felt on days with and without each behavior" />
+            <div className="hidden md:block">
+              <Browser src="/welcome/desktop-insights.png" alt="Insights on a laptop comparing how you felt on days with and without each behavior" />
+            </div>
+            <div className="mx-auto w-full max-w-[300px] md:hidden">
+              <Phone src="/welcome/phone-insights.png" alt="Insights on a phone: your anxiety tended to be 1.5 points higher on days when you recorded doomscrolling" />
+            </div>
           </div>
           <div className="max-w-lg">
             <h2 className="text-3xl font-semibold tracking-tight">Patterns, in plain words</h2>
