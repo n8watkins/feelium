@@ -165,8 +165,7 @@ export function InstallHint({ context = "reminders", onClose }: { context?: "rem
           <button
             type="button"
             onClick={install.install}
-            className="h-11 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
-            disabled={!install.hasPrompt}
+            className="h-11 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Install app
           </button>

@@ -55,7 +55,6 @@ export const branding = {
   /** Key brand copy, kept here so tone stays consistent and easy to rebrand. */
   copy: {
     tagline: "What did I do, how did I feel, and are they connected?",
-    authSubtitle: "Sign in to record what you did and how you felt.",
   },
 
   icons: ICONS,

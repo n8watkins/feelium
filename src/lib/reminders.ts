@@ -124,3 +124,11 @@ export function evaluateReminder(
     nextAt: nextReminderAt(reminderTime, timezone, now),
   };
 }
+
+/** "08:00" as "8:00 AM": a reminder's wall-clock time, in the en-US style used across the app. */
+export function formatReminderTime(value: string): string {
+  const [hour, minute] = value.split(":").map(Number);
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(
+    new Date(Date.UTC(2000, 0, 1, hour, minute)),
+  );
+}

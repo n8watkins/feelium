@@ -1,233 +1,132 @@
-import {
-  Bell,
-  ChevronRight,
-  CircleCheck,
-  Database,
-  ShieldCheck,
-  SmilePlus,
-  Tag,
-} from "lucide-react";
-import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
-
 import { auth } from "@/auth";
-import { ModeToggle } from "@/components/mode-toggle";
+import { InstallHint } from "@/components/install-hint";
 import { PageHeader } from "@/components/page-header";
+import { Section } from "@/components/section";
 import { PreferencesForm } from "@/components/settings/preferences-form";
+import { SettingsGroup, SettingsLink, SettingsRow } from "@/components/settings/settings-list";
+import { ThemeControl } from "@/components/settings/theme-control";
 import { Button } from "@/components/ui/button";
+import { formatReminderTime } from "@/lib/reminders";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { getCurrentProfile } from "@/server/data";
+  getCurrentProfile,
+  listActiveBehaviors,
+  listActiveOutcomeMetrics,
+  listReminderSettings,
+  listTags,
+} from "@/server/data";
 
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
-const TRACKING_LINKS: {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  description: string;
-}[] = [
-  { href: "/settings/behaviors", icon: CircleCheck, label: "Behaviors", description: "What you do" },
-  { href: "/settings/outcomes", icon: SmilePlus, label: "Outcomes", description: "How you feel" },
-  { href: "/settings/tags", icon: Tag, label: "Tags", description: "Context labels" },
-];
+/** "Exercise, Reading, Coffee and 2 more" */
+function names(list: { name: string }[], empty: string): string {
+  if (list.length === 0) return empty;
+  const shown = list.slice(0, 3).map((item) => item.name).join(", ");
+  return list.length > 3 ? `${shown} and ${list.length - 3} more` : shown;
+}
 
+/** Settings as one grouped list: account, what you track, reminders, preferences, data. */
 export default async function SettingsPage() {
   const session = await auth();
-  const profile = await getCurrentProfile();
+  const [profile, behaviors, outcomes, tags, reminders] = await Promise.all([
+    getCurrentProfile(),
+    listActiveBehaviors(),
+    listActiveOutcomeMetrics(),
+    listTags(),
+    listReminderSettings(),
+  ]);
+  const name = session?.user?.name || session?.user?.email || "Your account";
+  const image = session?.user?.image;
 
   return (
     <>
       <PageHeader title="Settings" />
-      <div className="space-y-6 px-4 pt-2 md:px-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Account</CardTitle>
-            <CardDescription>{session?.user?.email ?? "Signed in"}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* A plain POST to /api: a server action cannot clear the cookie on Workers. */}
-            <div className="flex flex-wrap gap-2">
+      <div className="grid gap-10 px-4 md:px-8">
+        <Section id="account" title="Account">
+          <SettingsGroup>
+            <li className="flex flex-wrap items-center gap-4 px-5 py-4">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={image} alt="" width={48} height={48} className="size-12 rounded-full bg-muted" />
+              ) : (
+                <span className="flex size-12 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground" aria-hidden="true">
+                  {name.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold">{name}</span>
+                <span className="block truncate text-sm text-muted-foreground">
+                  Signed in with GitHub{session?.user?.email ? ` · ${session.user.email}` : ""}
+                </span>
+              </span>
               <form method="post" action="/api/account/signout">
-                <Button type="submit" variant="outline">
+                <Button type="submit" variant="outline" className="h-9 rounded-full px-4">
                   Log out
                 </Button>
               </form>
+            </li>
+            <SettingsRow title="Every device" detail="Ends sessions on phones and browsers you're not using now">
               <form method="post" action="/api/account/signout-everywhere">
-                <Button type="submit" variant="ghost">
+                <Button type="submit" variant="ghost" className="h-9 rounded-full px-4">
                   Log out on every device
                 </Button>
               </form>
-            </div>
-          </CardContent>
-        </Card>
+            </SettingsRow>
+          </SettingsGroup>
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Preferences</CardTitle>
-            <CardDescription>
-              Calendar dates and summaries use these preferences.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Theme</span>
-              <ModeToggle />
-            </div>
-            <PreferencesForm
-              timezone={profile?.timezone ?? "UTC"}
-              weekStartsOn={profile?.weekStartsOn ?? 1}
-              timezones={TIMEZONES}
-              weekdays={WEEKDAYS}
-            />
-          </CardContent>
-        </Card>
+        <Section id="tracking" title="What you track">
+          <SettingsGroup>
+            <SettingsLink href="/settings/behaviors" title="Behaviors" detail={names(behaviors, "None yet")} />
+            <SettingsLink href="/settings/outcomes" title="Feelings" detail={names(outcomes, "None yet")} />
+            <SettingsLink href="/settings/tags" title="Tags" detail={names(tags, "None yet")} />
+          </SettingsGroup>
+        </Section>
 
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle>Tracking</CardTitle>
-            <CardDescription>
-              Manage what you track. Reorder items within each list.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <nav>
-              {TRACKING_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                >
-                  <link.icon
-                    className="size-5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1">
-                    <span className="block text-sm font-medium">{link.label}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {link.description}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </Link>
+        <Section id="reminders" title="Reminders">
+          <div className="space-y-3">
+            <SettingsGroup>
+              {reminders.map((reminder) => (
+                <SettingsRow
+                  key={reminder.id}
+                  title={formatReminderTime(reminder.reminderTime)}
+                  detail={reminder.isEnabled ? "Every day" : "Paused"}
+                />
               ))}
-            </nav>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="size-5 text-muted-foreground" aria-hidden="true" />
-              Notifications
-            </CardTitle>
-            <CardDescription>
-              Optional daily reminders at the times that work for you.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <nav>
-              <Link
+              <SettingsLink
                 href="/settings/notifications"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <span className="flex-1">
-                  <span className="block text-sm font-medium">Daily reminders</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Add times, pause reminders, and view permission status
-                  </span>
-                </span>
-                <ChevronRight
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </Link>
-            </nav>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="size-5 text-muted-foreground" aria-hidden="true" />
-              Data
-            </CardTitle>
-            <CardDescription>
-              Your data is yours. Export it, or delete it anytime.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <nav>
-              <Link
-                href="/settings/data"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <span className="flex-1">
-                  <span className="block text-sm font-medium">Export or delete</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Download your data, delete tracking data, or delete your account
-                  </span>
-                </span>
-                <ChevronRight
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </Link>
-            </nav>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck
-                className="size-5 text-muted-foreground"
-                aria-hidden="true"
+                title={reminders.length > 0 ? "Reminders and devices" : "Set up reminders"}
+                detail={reminders.length > 0 ? "Add, pause or remove times, and choose devices" : "A gentle nudge at the times you pick"}
               />
-              Privacy
-            </CardTitle>
-            <CardDescription>
-              How feelium keeps your entries private.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <nav>
-              <Link
-                href="/settings/privacy"
-                className="flex min-h-14 items-center gap-3 border-t border-border px-6 py-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <span className="flex-1">
-                  <span className="block text-sm font-medium">Privacy &amp; your data</span>
-                  <span className="block text-xs text-muted-foreground">
-                    Private by default - no sharing, no selling, no training
-                  </span>
-                </span>
-                <ChevronRight
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </Link>
-            </nav>
-          </CardContent>
-        </Card>
+            </SettingsGroup>
+            <InstallHint context="reminders" />
+          </div>
+        </Section>
+
+        <Section id="preferences" title="Preferences">
+          <SettingsGroup>
+            <SettingsRow title="Theme">
+              <ThemeControl />
+            </SettingsRow>
+            <li className="px-5 py-4">
+              <p className="mb-3 text-sm text-muted-foreground">Calendar dates and summaries use these.</p>
+              <PreferencesForm
+                timezone={profile?.timezone ?? "UTC"}
+                weekStartsOn={profile?.weekStartsOn ?? 1}
+                timezones={TIMEZONES}
+                weekdays={WEEKDAYS}
+              />
+            </li>
+          </SettingsGroup>
+        </Section>
+
+        <Section id="data" title="Your data">
+          <SettingsGroup>
+            <SettingsLink href="/api/account/export" prefetch={false} title="Export everything" detail="One JSON file with every entry, note and setting" />
+            <SettingsLink href="/settings/privacy" title="How your data is handled" detail="Private to your account. Never sold or used for training." />
+            <SettingsLink href="/settings/data" title="Delete data or account" detail="Clear your tracking data, or remove everything" />
+          </SettingsGroup>
+        </Section>
       </div>
     </>
   );

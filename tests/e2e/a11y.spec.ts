@@ -35,3 +35,17 @@ test("History, Insights, Data and Privacy meet WCAG AA contrast", async ({ conte
     expect(violations, path).toEqual([]);
   }
 });
+
+test("the landing page and the sign-in dialog meet WCAG AA contrast", async ({ page }) => {
+  for (const path of ["/", "/login"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(AXE);
+    const violations = await page.evaluate(async () => {
+      const axe = (window as unknown as { axe: { run: (o: unknown, c: unknown) => Promise<{ violations: { id: string; nodes: { target: string[] }[] }[] }> } }).axe;
+      const result = await axe.run(document, { runOnly: ["color-contrast"] });
+      return result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(" ")}`));
+    });
+    expect(violations, path).toEqual([]);
+  }
+});

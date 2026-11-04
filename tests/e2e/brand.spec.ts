@@ -21,7 +21,7 @@ test("the Three-tone logo is the favicon, the Apple icon and every manifest icon
   expect((await request.get((await apple.getAttribute("href"))!)).ok()).toBe(true);
 
   // The inline mark on the login page uses the theme tokens.
-  await expect(page.locator('main svg circle[fill="var(--logo-right)"]')).toHaveCount(1);
+  await expect(page.getByRole("dialog").locator('svg circle[fill="var(--logo-right)"]')).toHaveCount(1);
 
   const manifest = await (await request.get("/manifest.webmanifest")).json();
   const icons = manifest.icons as { src: string; sizes: string; purpose: string }[];
