@@ -85,7 +85,7 @@ export function OutcomeForm({
       </div>
 
       <fieldset className="space-y-3">
-        <legend className="text-sm font-medium">Input type</legend>
+        <legend className="text-sm font-medium">How you answer</legend>
         {lockInputType ? (
           <div className="space-y-1">
             <input
@@ -98,8 +98,8 @@ export function OutcomeForm({
                 ?.label ?? defaults?.inputType}
             </p>
             <p className="text-xs text-muted-foreground">
-              Input type is locked because check-ins have been recorded. Archive this
-              outcome and create a new one to change it.
+              Locked because you&apos;ve already answered it. To change it, archive this
+              feeling and add a new one.
             </p>
           </div>
         ) : (

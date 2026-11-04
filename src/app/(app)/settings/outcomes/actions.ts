@@ -13,6 +13,7 @@ import {
 import {
   archiveOutcomeMetric,
   createOutcomeMetric,
+  deleteOutcomeMetric,
   InputTypeLockedError,
   moveOutcomeMetric,
   reactivateOutcomeMetric,
@@ -95,7 +96,7 @@ export async function createOutcomeAction(
   if (!parsed.ok) return { errors: parsed.errors, values: parsed.values };
 
   await createOutcomeMetric(parsed.input);
-  revalidatePath(LIST_PATH);
+  revalidateFeelings();
   // Return to wherever this was launched from (e.g. a check-in), defaulting to the list.
   const destination = safeRedirectPath(
     String(formData.get("from") ?? ""),
@@ -120,7 +121,7 @@ export async function updateOutcomeAction(
       return {
         errors: {
           inputType:
-            "Input type can't change after check-ins exist. Archive this outcome and create a new one.",
+            "The answer type can't change once you've answered it. Archive this feeling and add a new one.",
         },
         values: parsed.values,
       };
@@ -128,23 +129,44 @@ export async function updateOutcomeAction(
     throw error;
   }
 
-  revalidatePath(LIST_PATH);
+  revalidateFeelings();
   redirect(LIST_PATH);
+}
+
+// Everything that shows feelings: the list, the check-in on Today, History and Insights.
+function revalidateFeelings() {
+  revalidatePath(LIST_PATH);
+  revalidatePath("/settings");
+  revalidatePath("/today");
+  revalidatePath("/history", "layout");
+  revalidatePath("/insights");
 }
 
 export async function archiveOutcomeAction(formData: FormData) {
   await archiveOutcomeMetric(String(formData.get("id") ?? ""));
-  revalidatePath(LIST_PATH);
+  revalidateFeelings();
 }
 
 export async function reactivateOutcomeAction(formData: FormData) {
   await reactivateOutcomeMetric(String(formData.get("id") ?? ""));
-  revalidatePath(LIST_PATH);
+  revalidateFeelings();
 }
 
 export async function moveOutcomeAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const direction = formData.get("direction") === "up" ? "up" : "down";
   await moveOutcomeMetric(id, direction);
-  revalidatePath(LIST_PATH);
+  revalidateFeelings();
+}
+
+export type DeleteOutcomeResult = { ok: true; erased: boolean } | { ok: false; error: string };
+
+/** Deletes a feeling, keeping its past answers unless `eraseAnswers` is "on". */
+export async function deleteOutcomeAction(formData: FormData): Promise<DeleteOutcomeResult> {
+  const result = await deleteOutcomeMetric(String(formData.get("id") ?? ""), {
+    eraseAnswers: formData.get("eraseAnswers") === "on",
+  });
+  if (!result) return { ok: false, error: "That feeling is already gone." };
+  revalidateFeelings();
+  return { ok: true, erased: result === "erased" };
 }

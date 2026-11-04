@@ -22,7 +22,7 @@ test("History, Insights, Data and Privacy meet WCAG AA contrast", async ({ conte
   await context.addCookies([
     { name: SESSION_COOKIE, value: token, url: e2e.baseURL, httpOnly: true, secure: e2e.baseURL.startsWith("https:"), sameSite: "Lax" },
   ]);
-  for (const path of ["/history", "/insights", "/settings/data", "/privacy"]) {
+  for (const path of ["/history", "/insights", "/settings/outcomes", "/settings/data", "/privacy"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
     // Evaluated through the DevTools protocol, so the page's CSP does not apply.

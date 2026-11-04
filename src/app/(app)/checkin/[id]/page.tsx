@@ -21,7 +21,8 @@ export default async function EditCheckInPage({
   const fromHistory = returnTo.startsWith("/history");
   const [detail, allOutcomes, tags] = await Promise.all([
     getCheckInDetail(id),
-    listOutcomeMetrics(),
+    // Deleted feelings too: an old check-in keeps showing (and saving) what it recorded.
+    listOutcomeMetrics({ includeDeleted: true }),
     listTags(),
   ]);
   if (!detail) notFound();
@@ -38,7 +39,7 @@ export default async function EditCheckInPage({
     };
   }
 
-  // Show active outcomes plus any (possibly archived) outcome already recorded here.
+  // Show active feelings plus any archived or deleted one already recorded here.
   const recordedIds = new Set(detail.values.map((v) => v.outcomeMetricId));
   const outcomes = allOutcomes
     .filter((o) => o.isActive || recordedIds.has(o.id))

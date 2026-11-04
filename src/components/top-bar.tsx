@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AccountMenu } from "@/components/account-menu";
 import { BrandMark } from "@/components/brand-mark";
 import { branding } from "@/config/branding";
 import { isActiveTab, NAV_ITEMS } from "@/lib/nav";
@@ -10,9 +11,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The app's top bar: the mark, the three tabs and Check in on desktop; the mark and the
- * account on phones (tabs sit at the bottom there). It clears the notch when installed.
+ * account menu on phones (tabs sit at the bottom there). It clears the notch when installed.
  */
-export function TopBar({ initial }: { initial: string }) {
+export function TopBar({ account }: { account: { name: string; email: string | null; image: string | null } }) {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -50,13 +51,7 @@ export function TopBar({ initial }: { initial: string }) {
         >
           Check in
         </Link>
-        <Link
-          href="/settings"
-          aria-label="Your account and settings"
-          className="ml-auto flex size-8 items-center justify-center rounded-full bg-muted text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:ml-0"
-        >
-          {initial}
-        </Link>
+        <AccountMenu {...account} />
       </div>
     </header>
   );

@@ -195,6 +195,9 @@ export const outcomeMetrics = sqliteTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     archivedAt: integer("archived_at", { mode: "timestamp" }),
+    // Set when the user deletes a feeling that already has answers: it leaves Settings,
+    // check-ins and Insights, while past check-ins keep showing what was recorded.
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
   },
   (t) => [
     index("outcome_metric_user_sort_idx").on(t.userId, t.sortOrder),

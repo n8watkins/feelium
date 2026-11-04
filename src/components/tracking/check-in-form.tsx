@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -203,13 +203,23 @@ export function CheckInForm({
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
         <span>Leave anything blank: it stays unknown, never zero.</span>
-        <Link
-          href={`/settings/outcomes/new?from=${encodeURIComponent(checkInId ? `/checkin/${checkInId}` : "/today")}`}
-          className="inline-flex min-h-9 items-center gap-1 font-medium hover:text-foreground"
-        >
-          <Plus className="size-3.5" aria-hidden="true" />
-          Add a feeling to rate
-        </Link>
+        {checkInId ? (
+          <Link
+            href={`/settings/outcomes/new?from=${encodeURIComponent(`/checkin/${checkInId}`)}`}
+            className="inline-flex min-h-9 items-center gap-1 font-medium hover:text-foreground"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            Add a feeling to rate
+          </Link>
+        ) : (
+          <Link
+            href="/settings/outcomes?from=/today"
+            className="inline-flex min-h-9 items-center gap-1.5 font-medium hover:text-foreground"
+          >
+            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+            Edit feelings
+          </Link>
+        )}
       </div>
 
       {error ? (
