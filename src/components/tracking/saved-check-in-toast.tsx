@@ -16,8 +16,11 @@ export function SavedCheckInToast() {
   useEffect(() => {
     if (shown.current) return;
     shown.current = true;
-    toast.success("Check-in saved.");
+    // On a full page load this effect runs before the Toaster (later in the layout) has
+    // subscribed, so a toast sent now would be dropped: send it on the next tick.
+    const timer = setTimeout(() => toast.success("Check-in saved."), 0);
     router.replace("/today");
+    return () => clearTimeout(timer);
   }, [router]);
 
   return null;

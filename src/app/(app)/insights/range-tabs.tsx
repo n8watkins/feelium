@@ -29,7 +29,7 @@ export function RangeTabs({ active }: { active: TimeRange }) {
               "flex-1 rounded-md px-2 py-1.5 text-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isActive
                 ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+                : "text-foreground/70 hover:text-foreground",
             )}
           >
             {range.shortLabel}

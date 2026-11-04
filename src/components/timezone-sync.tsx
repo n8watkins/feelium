@@ -92,7 +92,7 @@ export function TimezoneSync({
   return (
     <aside
       aria-labelledby="timezone-mismatch-title"
-      className="fixed inset-x-4 top-4 z-50 mx-auto max-w-xl rounded-xl border border-border bg-background p-4 shadow-lg"
+      className="mx-4 mt-4 rounded-xl border border-border bg-muted/40 p-4 md:mx-8 md:mt-6"
     >
       <div className="flex items-start gap-3">
         <Clock3 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />

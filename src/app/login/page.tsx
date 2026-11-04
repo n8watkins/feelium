@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { BrandMark } from "@/components/brand-mark";
 import { branding } from "@/config/branding";
 import { Button } from "@/components/ui/button";
@@ -82,6 +84,14 @@ export default async function LoginPage({
 
         <p className="text-center text-xs text-muted-foreground">
           {branding.copy.tagline}
+        </p>
+        <p className="text-center text-xs">
+          <Link
+            href="/privacy"
+            className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            How your data is handled
+          </Link>
         </p>
       </div>
     </main>

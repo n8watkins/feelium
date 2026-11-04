@@ -19,6 +19,10 @@ const { auth } = NextAuth(authConfig);
 const authMiddleware = auth((req) => {
   const isLoggedIn = Boolean(req.auth?.user);
   const isLoginPage = req.nextUrl.pathname === "/login";
+  // Public pages anyone can read before signing in.
+  if (req.nextUrl.pathname === "/privacy") {
+    return NextResponse.next({ request: { headers: req.headers } });
+  }
 
   if (isLoginPage) {
     // Signed-in users never see the login screen.

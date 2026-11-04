@@ -103,3 +103,22 @@ export function formatTime(
     minute: "2-digit",
   });
 }
+
+/**
+ * When a check-in happened, relative to today: "Today, 1:35 PM", "Yesterday, 9:00 PM" or
+ * "Mon, Nov 2, 9:00 PM".
+ */
+export function formatCheckInMoment(
+  localDate: string,
+  at: Date,
+  timeZone: string = DEFAULT_TIME_ZONE,
+): string {
+  const day = relativeDayLabel(localDate, timeZone) ?? formatDayShort(localDate);
+  return `${day}, ${formatTime(at, timeZone)}`;
+}
+
+/** "None yet today", "1 check-in today", "3 check-ins today". */
+export function checkInsTodayLabel(count: number): string {
+  if (count === 0) return "None yet today";
+  return `${count} check-in${count === 1 ? "" : "s"} today`;
+}

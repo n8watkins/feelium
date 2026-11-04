@@ -69,7 +69,7 @@ export function ComparisonCard({ comparison }: { comparison: Comparison }) {
           </p>
         ) : null}
 
-        <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
           Compares only days when both {c.behavior.name.toLowerCase()} and{" "}
           {c.outcome.name.toLowerCase()} were recorded. Where a day had several
           check-ins, its average is used. This is an association in your data, not
