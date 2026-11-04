@@ -31,6 +31,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          // Undo is the one action a toast carries: a comfortable target, not a 24 px chip.
+          actionButton: "!h-9 !rounded-full !px-4 !text-[13px] !font-semibold",
         },
       }}
       {...props}

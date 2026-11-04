@@ -18,6 +18,7 @@ export * from "./analytics";
 export * from "./starter";
 export * from "./notifications";
 export * from "./account";
+export * from "./undo";
 export { InputTypeLockedError, StaleSessionError } from "./errors";
 export type { BehaviorInput } from "./behaviors";
 export type { OutcomeInput } from "./outcomes";

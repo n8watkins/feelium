@@ -1,7 +1,8 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useTransition } from "react";
+import { toast } from "sonner";
 
 import {
   createTagAction,
@@ -9,20 +10,10 @@ import {
   renameTagAction,
   type TagFormState,
 } from "@/app/(app)/settings/tags/actions";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toastDeleted } from "@/components/undo-toast";
 import { MAX_NAME_LENGTH } from "@/lib/validation";
 
 type Tag = { id: string; name: string };
@@ -82,37 +73,36 @@ export function TagManager({ tags }: { tags: Tag[] }) {
                   Save
                 </Button>
               </form>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Delete ${tag.name}`}
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete “{tag.name}”?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This removes the tag from any past check-ins. The check-ins
-                      themselves are kept.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <form action={deleteTagAction}>
-                      <input type="hidden" name="id" value={tag.id} />
-                      <AlertDialogAction type="submit">Delete</AlertDialogAction>
-                    </form>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <DeleteTagButton id={tag.id} name={tag.name} />
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/** Deletes a tag at once (it leaves past check-ins, which stay), with Undo in the toast. */
+function DeleteTagButton({ id, name }: { id: string; name: string }) {
+  const [isPending, startTransition] = useTransition();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={`Delete ${name}`}
+      disabled={isPending}
+      onClick={() =>
+        startTransition(async () => {
+          try {
+            const undoId = await deleteTagAction(id);
+            if (undoId) toastDeleted(`“${name}” deleted`, undoId, "It's off your past check-ins too.");
+          } catch {
+            toast.error(`Couldn't delete “${name}”.`);
+          }
+        })
+      }
+    >
+      <Trash2 className="size-4" aria-hidden="true" />
+    </Button>
   );
 }

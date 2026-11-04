@@ -14,7 +14,6 @@ import {
   archiveOutcomeForUser,
   countAnswersByOutcomeForUser,
   createOutcomeForUser,
-  deleteOutcomeForUser,
   getOutcomeForUser,
   listActiveOutcomesForUser,
   listOutcomesForUser,
@@ -22,6 +21,17 @@ import {
   reactivateOutcomeForUser,
   updateOutcomeForUser,
 } from "@/server/data/outcome-operations";
+import { deleteOutcomeWithUndo } from "@/server/data/undo-operations";
+
+const deleteOutcomeForUser = async (
+  database: Parameters<typeof deleteOutcomeWithUndo>[0],
+  userId: string,
+  id: string,
+  options?: { eraseAnswers?: boolean },
+) => {
+  const result = await deleteOutcomeWithUndo(database, userId, id, options);
+  return result ? (result.erased ? "erased" : "kept-answers") : null;
+};
 
 const migrationsFolder = resolve("drizzle");
 

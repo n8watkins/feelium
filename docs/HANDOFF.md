@@ -109,6 +109,7 @@ Product tables:
 - `reminder_setting` - any number of daily reminders per user, each with independent enabled, time, timezone, scheduling, and lease state.
 - `reminder_delivery_attempt` - per-reminder, per-occurrence, per-device delivery progress used for retry-safe multi-reminder sends.
 - `push_subscription` - Web Push subscriptions per user/endpoint.
+- `undo_entry` - a snapshot of what an undoable delete removed, kept one minute for the toast's Undo, then purged.
 
 ---
 
@@ -170,6 +171,13 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 - **Outcome stats:** average plus a trend descriptor.
 - Copy is explicitly non-causal, with a disclaimer that these are associations in the user's own data, not medical advice.
 - Active metrics rank above archived ones.
+
+### Undo
+
+- Deleting a check-in, a feeling, a tag or a behavior category happens at once and shows a six-second toast "<what> deleted" with Undo; archiving a behavior or a feeling works the same way.
+  Undo restores exactly: same ids, values, tags and links (`src/server/data/undo-operations.ts`, covered by `tests/undo.integration.test.ts` and `tests/e2e/undo.spec.ts`).
+- The delete writes its snapshot to `undo_entry` in the same atomic batch; entries expire after a minute, only their owner can use them, and expired ones are purged on every delete, every Undo and every five-minute reminder run.
+- Irreversible actions (delete all data, delete the account) keep their type-to-confirm dialog.
 
 ### Account menu
 
