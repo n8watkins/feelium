@@ -34,8 +34,9 @@ export function PageHeader({
           {backLabel}
         </Link>
       ) : null}
-      <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0 space-y-1">
+      {/* The action wraps below the title when both don't fit (range tabs on a phone). */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-4">
+        <div className="min-w-fit space-y-1">
           {eyebrow ? <p className="text-sm text-muted-foreground">{eyebrow}</p> : null}
           <h1
             className={

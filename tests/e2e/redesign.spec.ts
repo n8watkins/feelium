@@ -100,3 +100,22 @@ test("the installed app opens on Today, standalone, with launch screens for ligh
   }
   await expect(page.locator('link[rel="apple-touch-startup-image"][media*="prefers-color-scheme: dark"]')).toHaveCount(6);
 });
+
+test("Insights shows what stands out, each feeling day by day, and how often each behavior happened", async ({ context, page }) => {
+  await signIn(context);
+  await page.goto("/insights");
+  await expect(page.getByRole("heading", { name: "Insights", level: 1 })).toBeVisible();
+  const ranges = page.getByRole("navigation", { name: "Time range" });
+  await expect(ranges.getByRole("link", { name: "30 days" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("region", { name: "What stands out" })).toBeVisible();
+  // One calendar per recorded feeling, with a text summary the chart is labeled by.
+  const grids = page.getByRole("region", { name: "How you felt, day by day" }).getByRole("img");
+  expect(await grids.count()).toBeGreaterThan(0);
+  await expect(grids.first()).toHaveAttribute("aria-label", /for each of the last 30 days\./);
+  const strips = page.getByRole("region", { name: "How often you did each" }).getByRole("img");
+  expect(await strips.count()).toBeGreaterThan(0);
+  await ranges.getByRole("link", { name: "7 days" }).click();
+  await expect(page).toHaveURL(/range=7/);
+  await expect(grids.first()).toHaveAttribute("aria-label", /for each of the last 7 days\./);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+});

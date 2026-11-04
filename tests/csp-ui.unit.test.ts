@@ -5,31 +5,38 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ProportionalBar } from "@/app/(app)/insights/_components/proportional-bar";
-import { Sparkline } from "@/app/(app)/insights/_components/sparkline";
+import { DayGrid } from "@/app/(app)/insights/_components/day-grid";
+import { FindingCard } from "@/app/(app)/insights/_components/finding-card";
+import { FrequencyStrip } from "@/app/(app)/insights/_components/frequency-strip";
+import { computeInsights, type InsightsInput } from "@/lib/analytics";
 
-test("insights charts encode dimensions as CSP-safe SVG geometry", () => {
-  const sparkline = renderToStaticMarkup(
-    createElement(Sparkline, {
-      buckets: [
-        { label: "Earlier", value: 2 },
-        { label: "Later", value: 10 },
-      ],
-      domainMin: 0,
-      domainMax: 10,
-    }),
-  );
-  const bar = renderToStaticMarkup(
-    createElement(ProportionalBar, {
-      percentage: 37,
-      className: "fill-primary/70",
-    }),
-  );
+function sampleInsights() {
+  const days = Array.from({ length: 12 }, (_, i) => `2026-07-${String(i + 1).padStart(2, "0")}`);
+  const input: InsightsInput = {
+    range: "30",
+    today: "2026-07-14",
+    behaviors: [{ id: "walk", name: "Walk", inputType: "boolean", desiredDirection: "increase", unit: null, isActive: true }],
+    outcomes: [{ id: "mood", name: "Mood", inputType: "rating", desiredDirection: "higher_is_better", unit: null, isActive: true }],
+    entries: days.map((entryDate, i) => ({ behaviorId: "walk", entryDate, booleanValue: i % 2 === 0, numericValue: null })),
+    values: days.map((localDate, i) => ({ outcomeMetricId: "mood", localDate, occurredAt: i, rating: i % 2 === 0 ? 4 : 2, boolean: null, numeric: null })),
+  };
+  return computeInsights(input);
+}
 
-  assert.match(sparkline, /y="80"[^>]*height="20"/);
-  assert.match(sparkline, /y="0"[^>]*height="100"/);
-  assert.match(bar, /width="37"[^>]*height="1"/);
-  assert.doesNotMatch(`${sparkline}${bar}`, /style=/);
+test("Insights charts encode values as CSP-safe SVG geometry, never inline styles", () => {
+  const data = sampleInsights();
+  const comparison = data.comparisons.find((c) => c.eligible)!;
+  const finding = renderToStaticMarkup(createElement(FindingCard, { comparison }));
+  const grid = renderToStaticMarkup(createElement(DayGrid, { stats: data.outcomes[0] }));
+  const strip = renderToStaticMarkup(createElement(FrequencyStrip, { stats: data.behaviors[0] }));
+
+  // Mood 4 on walk days sits at x = 8 + (4 - 1) / 4 * 284 = 221 on the 1 to 5 scale.
+  assert.match(finding, /<circle cx="221" cy="10" r="7"/);
+  // A 4 of 5 day is shaded at 0.15 + 0.85 * 0.75 = 0.7875.
+  assert.match(grid, /fill-opacity="0.7875"/);
+  // Thirty days in the strip, one bar each.
+  assert.equal(strip.match(/<rect /g)?.length, 30);
+  assert.doesNotMatch(`${finding}${grid}${strip}`, /style=/);
 });
 
 test("Sonner theme variables come from CSP-compatible application CSS", async () => {
