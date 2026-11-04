@@ -37,7 +37,7 @@ export async function createCheckInAction(
     return { ok: false, error: "Some check-in values were invalid." };
   }
   if (!hasContent(parsed.data)) {
-    return { ok: false, error: "Add at least one outcome, tag, or note." };
+    return { ok: false, error: "Answer at least one feeling, or add a tag or note." };
   }
 
   try {
@@ -62,7 +62,7 @@ export async function updateCheckInAction(
     return { ok: false, error: "Some check-in values were invalid." };
   }
   if (!hasContent(parsed.data)) {
-    return { ok: false, error: "Add at least one outcome, tag, or note." };
+    return { ok: false, error: "Answer at least one feeling, or add a tag or note." };
   }
 
   try {

@@ -35,10 +35,14 @@ export default async function AppLayout({
     throw error;
   }
 
-  const name = session.user.name || session.user.email || "You";
+  const account = {
+    name: session.user.name || session.user.email || "You",
+    email: session.user.email ?? null,
+    image: session.user.image ?? null,
+  };
   return (
     <>
-      <TopBar initial={name.trim().charAt(0).toUpperCase()} />
+      <TopBar account={account} />
       <main className="mx-auto w-full max-w-3xl flex-1 pb-28 has-[[data-wide]]:max-w-5xl md:pb-16">
         {/* In the page flow, above the content, so it never covers the header or Check in. */}
         <TimezoneSync

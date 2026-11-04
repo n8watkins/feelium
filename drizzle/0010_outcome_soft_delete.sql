@@ -1,0 +1,1 @@
+ALTER TABLE `outcome_metric` ADD `deleted_at` integer;

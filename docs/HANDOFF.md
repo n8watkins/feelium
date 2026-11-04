@@ -102,7 +102,7 @@ Product tables:
 - `behavior_category` - user-owned category names, constrained colors, and explicit sort order.
 - `behavior` - boolean or numeric; optional category; desired direction (increase/reduce/neutral); optional unit and custom prompt; sort order; archive flag.
 - `daily_behavior_entry` - one per behavior per day (unique); boolean and numeric values both nullable.
-- `outcome_metric` - rating (1-5), boolean, or numeric; optional desired direction; sort order; archive flag.
+- `outcome_metric` (a "feeling" in the UI) - rating (1-5), boolean, or numeric; optional desired direction; sort order; archive flag; `deleted_at` for a feeling deleted while its past answers are kept.
 - `check_in` - a point-in-time entry (local date + timestamp + note).
 - `check_in_value` - one per outcome metric per check-in (unique); rating/boolean/numeric all nullable.
 - `tag` and `check_in_tag` - free-form tags (unique name per user) linked many-to-many to check-ins.
@@ -171,9 +171,18 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 - Copy is explicitly non-causal, with a disclaimer that these are associations in the user's own data, not medical advice.
 - Active metrics rank above archived ones.
 
+### Account menu
+
+- The avatar at the top right (`src/components/account-menu.tsx`) opens a Radix menu: name and email, Settings, Edit feelings, the theme (Light, Dark, System), Log out, and Log out on every device.
+  Radix gives the menu-button keyboard pattern, Escape and outside-click closing, and returns focus to the avatar.
+
 ### Settings
 
-- **Behaviors / Outcomes:** full CRUD, reorder, archive-with-confirmation, and reactivate. Input type locks once entries/values exist (to protect stored data).
+- **Behaviors:** full CRUD, reorder, archive-with-confirmation, and reactivate. Input type locks once entries exist (to protect stored data).
+- **Feelings** (`/settings/outcomes`, also reached from "Edit feelings" on Today and in the account menu): add, rename, reorder, archive (instant, with Undo) and restore in place, and delete.
+  Deleting a feeling with answers marks it deleted: it leaves Settings, the check-in and Insights, while past check-ins keep showing the answers with a "Deleted" badge.
+  The delete dialog can also erase those answers, which removes the row and its values in one batch; a feeling never answered is removed outright.
+  The logic is session-free in `src/server/data/outcome-operations.ts`, covered by `tests/outcomes.integration.test.ts`.
 - **Behavior categories:** create, rename, recolor, reorder, and delete categories without deleting assigned behaviors.
 - **Tags:** list, rename, delete.
 - **Notifications:** create, edit, pause, enable, and delete any number of daily reminders; manage Web Push permission and device subscriptions separately; and send a test push.

@@ -79,7 +79,7 @@ test("an empty check-in explains itself next to Save, and toasts stay clear of t
   await expect(page).toHaveURL(/\/today#checkin$/);
   await expect(page.getByRole("region", { name: "What you did today" })).toContainText("Saved as you tap");
   await page.getByRole("button", { name: "Save check-in" }).click();
-  const error = page.getByRole("alert").filter({ hasText: "Add at least one outcome, tag, or note." });
+  const error = page.getByRole("alert").filter({ hasText: "Answer at least one feeling, or add a tag or note." });
   await expect(error).toBeVisible();
   const save = page.getByRole("button", { name: "Save check-in" });
   const [errorBox, saveBox] = [(await error.boundingBox())!, (await save.boundingBox())!];

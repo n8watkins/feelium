@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -61,7 +61,8 @@ export async function getInsights(range: TimeRange): Promise<InsightsData> {
         sortOrder: outcomeMetrics.sortOrder,
       })
       .from(outcomeMetrics)
-      .where(eq(outcomeMetrics.userId, userId)),
+      // A deleted feeling leaves Insights; its answers stay only on past check-ins.
+      .where(and(eq(outcomeMetrics.userId, userId), isNull(outcomeMetrics.deletedAt))),
     db
       .select({
         behaviorId: dailyBehaviorEntries.behaviorId,

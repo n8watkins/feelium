@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { OutcomeForm } from "@/components/tracking/outcome-form";
-import { getOutcomeMetric, outcomeMetricHasValues } from "@/server/data";
+import { countOutcomeMetricAnswers, getOutcomeMetric } from "@/server/data";
 import { updateOutcomeAction } from "../actions";
 
-export const metadata = { title: "Edit outcome" };
+export const metadata = { title: "Edit feeling" };
 
 export default async function EditOutcomePage({
   params,
@@ -16,11 +16,11 @@ export default async function EditOutcomePage({
   const outcome = await getOutcomeMetric(id);
   if (!outcome) notFound();
 
-  const lockInputType = await outcomeMetricHasValues(id);
+  const lockInputType = (await countOutcomeMetricAnswers(id)) > 0;
 
   return (
     <>
-      <PageHeader title="Edit outcome" backHref="/settings/outcomes" backLabel="Outcomes" />
+      <PageHeader title={`Edit ${outcome.name}`} backHref="/settings/outcomes" backLabel="Feelings" />
       <div className="px-4 pb-4 pt-2 md:px-8">
         <OutcomeForm
           action={updateOutcomeAction}

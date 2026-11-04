@@ -187,7 +187,11 @@ function CheckInCard({
             >
               <dt className="flex items-center gap-1.5 text-muted-foreground">
                 {value.name}
-                {!value.isActive ? (
+                {value.deletedAt ? (
+                  <Badge variant="outline" className="font-normal">
+                    Deleted
+                  </Badge>
+                ) : !value.isActive ? (
                   <Badge variant="outline" className="gap-1 font-normal">
                     <Archive className="size-3" aria-hidden="true" />
                     Archived

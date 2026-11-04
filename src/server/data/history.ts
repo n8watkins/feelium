@@ -311,6 +311,8 @@ export type DayCheckInValue = {
   unit: string | null;
   isActive: boolean;
   archivedAt: Date | null;
+  /** Set when the feeling was deleted after this answer was recorded. */
+  deletedAt: Date | null;
   rating: number | null;
   boolean: boolean | null;
   numeric: number | null;
@@ -403,6 +405,7 @@ export async function getDayDetail(date: string): Promise<DayDetail> {
         unit: outcomeMetrics.unit,
         isActive: outcomeMetrics.isActive,
         archivedAt: outcomeMetrics.archivedAt,
+        deletedAt: outcomeMetrics.deletedAt,
         rating: checkInValues.ratingValue,
         boolean: checkInValues.booleanValue,
         numeric: checkInValues.numericValue,
@@ -426,6 +429,7 @@ export async function getDayDetail(date: string): Promise<DayDetail> {
         unit: row.unit,
         isActive: row.isActive,
         archivedAt: row.archivedAt,
+        deletedAt: row.deletedAt,
         rating: row.rating,
         boolean: row.boolean,
         numeric: row.numeric,

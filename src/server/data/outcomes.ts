@@ -1,157 +1,73 @@
 import "server-only";
 
-import { and, asc, count, eq } from "drizzle-orm";
-
 import { db } from "@/db";
 import {
-  checkInValues,
-  outcomeMetrics,
-  type OutcomeDirection,
-  type OutcomeInputType,
-} from "@/db/schema";
-import { InputTypeLockedError } from "./errors";
+  archiveOutcomeForUser,
+  countAnswersByOutcomeForUser,
+  countOutcomeAnswersForUser,
+  createOutcomeForUser,
+  deleteOutcomeForUser,
+  getOutcomeForUser,
+  listActiveOutcomesForUser,
+  listOutcomesForUser,
+  moveOutcomeForUser,
+  reactivateOutcomeForUser,
+  updateOutcomeForUser,
+  type OutcomeInput,
+} from "./outcome-operations";
 import { requireUserId } from "./session";
 
-export type OutcomeInput = {
-  name: string;
-  inputType: OutcomeInputType;
-  desiredDirection: OutcomeDirection | null;
-  unit: string | null;
-  description: string | null;
-};
+export type { OutcomeInput } from "./outcome-operations";
 
-export async function listOutcomeMetrics() {
-  const userId = await requireUserId();
-  return db
-    .select()
-    .from(outcomeMetrics)
-    .where(eq(outcomeMetrics.userId, userId))
-    .orderBy(asc(outcomeMetrics.sortOrder), asc(outcomeMetrics.createdAt));
+/**
+ * The session user's feelings (outcome metrics). Each call scopes to the signed-in user;
+ * the logic itself lives in ./outcome-operations.
+ */
+
+/** Active and archived feelings; `includeDeleted` adds deleted ones (for old check-ins). */
+export async function listOutcomeMetrics(options?: { includeDeleted?: boolean }) {
+  return listOutcomesForUser(db, await requireUserId(), options);
 }
 
-/** Active outcome metrics only, in sort order (used by the check-in form later). */
+/** The feelings a check-in asks about, in order. */
 export async function listActiveOutcomeMetrics() {
-  const userId = await requireUserId();
-  return db
-    .select()
-    .from(outcomeMetrics)
-    .where(
-      and(eq(outcomeMetrics.userId, userId), eq(outcomeMetrics.isActive, true)),
-    )
-    .orderBy(asc(outcomeMetrics.sortOrder), asc(outcomeMetrics.createdAt));
+  return listActiveOutcomesForUser(db, await requireUserId());
 }
 
 export async function getOutcomeMetric(id: string) {
-  const userId = await requireUserId();
-  const [row] = await db
-    .select()
-    .from(outcomeMetrics)
-    .where(and(eq(outcomeMetrics.id, id), eq(outcomeMetrics.userId, userId)))
-    .limit(1);
-  return row ?? null;
+  return getOutcomeForUser(db, await requireUserId(), id);
 }
 
-/** True once any check-in value has been recorded for this metric (input-type lock). */
-export async function outcomeMetricHasValues(id: string): Promise<boolean> {
-  const userId = await requireUserId();
-  const [row] = await db
-    .select({ n: count() })
-    .from(checkInValues)
-    .where(
-      and(
-        eq(checkInValues.outcomeMetricId, id),
-        eq(checkInValues.userId, userId),
-      ),
-    );
-  return (row?.n ?? 0) > 0;
+/** How many check-ins hold an answer for this feeling (locks its input type). */
+export async function countOutcomeMetricAnswers(id: string): Promise<number> {
+  return countOutcomeAnswersForUser(db, await requireUserId(), id);
 }
 
-async function nextActiveSortOrder(userId: string): Promise<number> {
-  const rows = await db
-    .select({ sortOrder: outcomeMetrics.sortOrder })
-    .from(outcomeMetrics)
-    .where(
-      and(eq(outcomeMetrics.userId, userId), eq(outcomeMetrics.isActive, true)),
-    );
-  return rows.reduce((max, r) => Math.max(max, r.sortOrder), -1) + 1;
+/** Answer counts per feeling id (feelings with no answers are absent). */
+export async function countAnswersByOutcome(): Promise<Map<string, number>> {
+  return countAnswersByOutcomeForUser(db, await requireUserId());
 }
 
 export async function createOutcomeMetric(input: OutcomeInput) {
-  const userId = await requireUserId();
-  const sortOrder = await nextActiveSortOrder(userId);
-  const [row] = await db
-    .insert(outcomeMetrics)
-    .values({ userId, sortOrder, ...input })
-    .returning();
-  return row;
+  return createOutcomeForUser(db, await requireUserId(), input);
 }
 
 export async function updateOutcomeMetric(id: string, input: OutcomeInput) {
-  const userId = await requireUserId();
-  const existing = await getOutcomeMetric(id);
-  if (!existing) throw new Error("NOT_FOUND");
-
-  if (
-    input.inputType !== existing.inputType &&
-    (await outcomeMetricHasValues(id))
-  ) {
-    throw new InputTypeLockedError();
-  }
-
-  await db
-    .update(outcomeMetrics)
-    .set({
-      name: input.name,
-      inputType: input.inputType,
-      desiredDirection: input.desiredDirection,
-      unit: input.unit,
-      description: input.description,
-    })
-    .where(and(eq(outcomeMetrics.id, id), eq(outcomeMetrics.userId, userId)));
+  return updateOutcomeForUser(db, await requireUserId(), id, input);
 }
 
 export async function archiveOutcomeMetric(id: string) {
-  const userId = await requireUserId();
-  await db
-    .update(outcomeMetrics)
-    .set({ isActive: false, archivedAt: new Date() })
-    .where(and(eq(outcomeMetrics.id, id), eq(outcomeMetrics.userId, userId)));
+  return archiveOutcomeForUser(db, await requireUserId(), id);
 }
 
 export async function reactivateOutcomeMetric(id: string) {
-  const userId = await requireUserId();
-  const sortOrder = await nextActiveSortOrder(userId);
-  await db
-    .update(outcomeMetrics)
-    .set({ isActive: true, archivedAt: null, sortOrder })
-    .where(and(eq(outcomeMetrics.id, id), eq(outcomeMetrics.userId, userId)));
+  return reactivateOutcomeForUser(db, await requireUserId(), id);
 }
 
 export async function moveOutcomeMetric(id: string, direction: "up" | "down") {
-  const userId = await requireUserId();
-  const active = await db
-    .select()
-    .from(outcomeMetrics)
-    .where(
-      and(eq(outcomeMetrics.userId, userId), eq(outcomeMetrics.isActive, true)),
-    )
-    .orderBy(asc(outcomeMetrics.sortOrder), asc(outcomeMetrics.createdAt));
+  return moveOutcomeForUser(db, await requireUserId(), id, direction);
+}
 
-  const index = active.findIndex((o) => o.id === id);
-  if (index === -1) return;
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (swapIndex < 0 || swapIndex >= active.length) return;
-
-  const a = active[index];
-  const b = active[swapIndex];
-  await db.batch([
-    db
-      .update(outcomeMetrics)
-      .set({ sortOrder: b.sortOrder })
-      .where(and(eq(outcomeMetrics.id, a.id), eq(outcomeMetrics.userId, userId))),
-    db
-      .update(outcomeMetrics)
-      .set({ sortOrder: a.sortOrder })
-      .where(and(eq(outcomeMetrics.id, b.id), eq(outcomeMetrics.userId, userId))),
-  ]);
+export async function deleteOutcomeMetric(id: string, options?: { eraseAnswers?: boolean }) {
+  return deleteOutcomeForUser(db, await requireUserId(), id, options);
 }

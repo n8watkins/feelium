@@ -19,7 +19,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "rm -f .data/local.db .data/local.db-shm .data/local.db-wal && drizzle-kit migrate",
-    "test:data-operations": "tsx --test tests/review-findings.integration.test.ts tests/push-subscriptions.integration.test.ts tests/sessions.integration.test.ts",
+    "test:data-operations": "tsx --test tests/outcomes.integration.test.ts tests/review-findings.integration.test.ts tests/push-subscriptions.integration.test.ts tests/sessions.integration.test.ts",
     "test:categories": "tsx --test tests/categories.integration.test.ts",
     "test:e2e": "playwright test",
     "test:migrations": "tsx --test tests/migrations.integration.test.ts",
