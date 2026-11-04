@@ -234,7 +234,7 @@ function CheckInCard({
         <DeleteCheckInButton
           checkInId={checkIn.id}
           date={date}
-          label={`The ${time} check-in`}
+          time={time}
         />
       </div>
     </div>

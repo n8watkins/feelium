@@ -12,6 +12,7 @@ import {
   checkIns,
   dailyBehaviorEntries,
   outcomeMetrics,
+  undoEntries,
   profiles,
   pushSubscriptions,
   reminderDeliveryAttempts,
@@ -259,6 +260,8 @@ function trackingDeletes(
       .where(eq(behaviorCategories.userId, userId)),
     database.delete(outcomeMetrics).where(eq(outcomeMetrics.userId, userId)),
     database.delete(tags).where(eq(tags.userId, userId)),
+    // Snapshots kept for Undo hold tracking data too.
+    database.delete(undoEntries).where(eq(undoEntries.userId, userId)),
     database
       .delete(reminderSettings)
       .where(eq(reminderSettings.userId, userId)),

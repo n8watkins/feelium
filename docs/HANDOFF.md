@@ -109,6 +109,7 @@ Product tables:
 - `reminder_setting` - any number of daily reminders per user, each with independent enabled, time, timezone, scheduling, and lease state.
 - `reminder_delivery_attempt` - per-reminder, per-occurrence, per-device delivery progress used for retry-safe multi-reminder sends.
 - `push_subscription` - Web Push subscriptions per user/endpoint.
+- `undo_entry` - a snapshot of what an undoable delete removed, kept one minute for the toast's Undo, then purged.
 
 ---
 
@@ -171,6 +172,13 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 - Copy is explicitly non-causal, with a disclaimer that these are associations in the user's own data, not medical advice.
 - Active metrics rank above archived ones.
 
+### Undo
+
+- Deleting a check-in, a feeling, a tag or a behavior category happens at once and shows a six-second toast "<what> deleted" with Undo; archiving a behavior or a feeling works the same way.
+  Undo restores exactly: same ids, values, tags and links (`src/server/data/undo-operations.ts`, covered by `tests/undo.integration.test.ts` and `tests/e2e/undo.spec.ts`).
+- The delete writes its snapshot to `undo_entry` in the same atomic batch; entries expire after a minute, only their owner can use them, and expired ones are purged on every delete, every Undo and every five-minute reminder run.
+- Irreversible actions (delete all data, delete the account) keep their type-to-confirm dialog.
+
 ### Account menu
 
 - The avatar at the top right (`src/components/account-menu.tsx`) opens a Radix menu: name and email, Settings, Edit feelings, the theme (Light, Dark, System), Log out, and Log out on every device.
@@ -202,7 +210,9 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 
 - The route guard (`src/proxy.ts`) only guards the app's own screens (`src/lib/app-paths.ts`), so an unknown path gets the styled 404 with a real 404 status, signed in or not.
 - Error pages offer Try again and a way home: `(app)/error.tsx` inside the app, `error.tsx` for public pages, and `global-error.tsx` when the root layout itself fails.
-- Cloudflare Web Analytics (cookie-free) loads only when the `CF_WEB_ANALYTICS_TOKEN` Worker variable is set (it is, in `wrangler.jsonc`); the script carries the CSP nonce and the policy allows its beacon host.
+- Cloudflare Web Analytics (cookie-free) loads only when the `CF_WEB_ANALYTICS_TOKEN` Worker secret is set; the script carries the CSP nonce and the policy allows its beacon host.
+  The token must belong to a Web Analytics site for the host `feelium.n8builds.dev`: the account's `n8builds.dev` site token is rejected there (its beacon posts get a 404).
+  Create the site in the dashboard (Analytics and Logs, Web Analytics, Add a site, `feelium.n8builds.dev`, manual setup), then `npx wrangler secret put CF_WEB_ANALYTICS_TOKEN`.
 - Sentry reports browser and Worker errors only when the `SENTRY_DSN` Worker secret is set: `npx wrangler secret put SENTRY_DSN`.
   Events carry no user, IP, cookies, headers, bodies or query strings (`src/lib/error-reporting.ts`), all errors are sent and 5% of requests are traced.
   Source maps are not uploaded yet.

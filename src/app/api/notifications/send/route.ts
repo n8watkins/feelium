@@ -14,10 +14,12 @@ import {
   releaseReminderDelivery,
   renewReminderDelivery,
   scheduleNextReminder,
+  purgeExpiredUndoEntries,
   type ReminderCandidate,
 } from "@/server/data";
 import { evaluateReminder, type ReminderEvaluation } from "@/lib/reminders";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { errorSummary, logError } from "@/lib/log";
 import { isPushConfigured, sendPush } from "@/server/push/webpush";
 
 /**
@@ -69,6 +71,10 @@ async function handle(request: NextRequest) {
       { status: 401 },
     );
   }
+  // Housekeeping on the same five-minute clock: expired Undo snapshots go for good.
+  await purgeExpiredUndoEntries().catch((error) =>
+    logError({ event: "undo_purge_failed", reason: "purge_threw", route: "/api/notifications/send", error: errorSummary(error) }),
+  );
   if (!isPushConfigured()) {
     return NextResponse.json(
       { ok: false, error: "Web Push is not configured on the server." },

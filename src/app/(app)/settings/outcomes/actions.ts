@@ -159,14 +159,16 @@ export async function moveOutcomeAction(formData: FormData) {
   revalidateFeelings();
 }
 
-export type DeleteOutcomeResult = { ok: true; erased: boolean } | { ok: false; error: string };
+export type DeleteOutcomeResult =
+  | { ok: true; erased: boolean; undoId: string }
+  | { ok: false; error: string };
 
-/** Deletes a feeling, keeping its past answers unless `eraseAnswers` is "on". */
+/** Deletes a feeling at once, keeping its past answers unless `eraseAnswers` is "on". */
 export async function deleteOutcomeAction(formData: FormData): Promise<DeleteOutcomeResult> {
   const result = await deleteOutcomeMetric(String(formData.get("id") ?? ""), {
     eraseAnswers: formData.get("eraseAnswers") === "on",
   });
   if (!result) return { ok: false, error: "That feeling is already gone." };
   revalidateFeelings();
-  return { ok: true, erased: result === "erased" };
+  return { ok: true, erased: result.erased, undoId: result.undoId };
 }

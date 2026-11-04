@@ -1,22 +1,12 @@
 "use client";
 
-import { Archive, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, Eraser, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useId, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { toast } from "sonner";
 
 import type { DeleteOutcomeResult } from "@/app/(app)/settings/outcomes/actions";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,18 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
+import { toastDeleted, UNDO_TOAST_MS } from "@/components/undo-toast";
 
 type Action = (formData: FormData) => Promise<void>;
 
-function answersLabel(n: number) {
-  return n === 1 ? "1 answer" : `${n} answers`;
-}
-
 /**
- * The "More" menu on a feeling in Settings: edit it, archive it, or delete it.
- * Archiving is instant and undoable from the toast. Deleting asks first; past answers
- * stay in History unless the user also ticks "erase", which can't be undone.
+ * The "More" menu on a feeling in Settings: edit, archive, or delete it. Every change
+ * happens at once with Undo in the toast. Delete keeps the past answers on their days in
+ * History; "Delete with its answers" erases them too (and Undo brings them back).
  */
 export function FeelingMenu({
   id,
@@ -54,25 +40,23 @@ export function FeelingMenu({
   reactivateAction: Action;
   deleteAction: (formData: FormData) => Promise<DeleteOutcomeResult>;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [erase, setErase] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const eraseId = useId();
 
-  function run(action: Action, extra?: Record<string, string>) {
+  function form(extra?: Record<string, string>) {
     const formData = new FormData();
     formData.set("id", id);
     for (const [key, value] of Object.entries(extra ?? {})) formData.set(key, value);
-    return action(formData);
+    return formData;
   }
 
   function archive() {
     startTransition(async () => {
       try {
-        await run(archiveAction);
-        toast.success(`${name} archived`, {
+        await archiveAction(form());
+        toast(`${name} archived`, {
           description: "It's off your check-in. Its answers stay in History and Insights.",
-          action: { label: "Undo", onClick: () => void run(reactivateAction) },
+          duration: UNDO_TOAST_MS,
+          action: { label: "Undo", onClick: () => void reactivateAction(form()) },
         });
       } catch {
         toast.error(`Couldn't archive ${name}. Try again.`);
@@ -80,24 +64,23 @@ export function FeelingMenu({
     });
   }
 
-  function confirmDelete() {
+  function remove(eraseAnswers: boolean) {
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set("id", id);
-      if (erase) formData.set("eraseAnswers", "on");
       try {
-        const result = await deleteAction(formData);
+        const result = await deleteAction(form(eraseAnswers ? { eraseAnswers: "on" } : undefined));
         if (!result.ok) {
           toast.error(result.error);
           return;
         }
-        setConfirmOpen(false);
-        toast.success(`${name} deleted`, {
-          description:
-            answers > 0 && !result.erased
-              ? "Your past answers stay on their days in History."
-              : undefined,
-        });
+        toastDeleted(
+          `${name} deleted`,
+          result.undoId,
+          answers === 0
+            ? undefined
+            : result.erased
+              ? `Its ${answers === 1 ? "answer was" : `${answers} answers were`} erased too.`
+              : "Your past answers stay on their days in History.",
+        );
       } catch {
         toast.error(`Couldn't delete ${name}. Try again.`);
       }
@@ -105,90 +88,44 @@ export function FeelingMenu({
   }
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={`More for ${name}`}
-            disabled={isPending}
-            className="size-11 rounded-full text-muted-foreground hover:text-foreground md:size-9"
-          >
-            <MoreHorizontal className="size-4" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52 rounded-2xl p-1.5">
-          <DropdownMenuItem asChild className="min-h-10 rounded-xl px-3">
-            <Link href={`/settings/outcomes/${id}`}>
-              <Pencil aria-hidden="true" />
-              Rename or edit
-            </Link>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`More for ${name}`}
+          disabled={isPending}
+          className="size-11 rounded-full text-muted-foreground hover:text-foreground md:size-9"
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60 rounded-2xl p-1.5">
+        <DropdownMenuItem asChild className="min-h-10 rounded-xl px-3">
+          <Link href={`/settings/outcomes/${id}`}>
+            <Pencil aria-hidden="true" />
+            Rename or edit
+          </Link>
+        </DropdownMenuItem>
+        {isActive ? (
+          <DropdownMenuItem className="min-h-10 rounded-xl px-3" onSelect={archive}>
+            <Archive aria-hidden="true" />
+            Archive
           </DropdownMenuItem>
-          {isActive ? (
-            <DropdownMenuItem className="min-h-10 rounded-xl px-3" onSelect={archive}>
-              <Archive aria-hidden="true" />
-              Archive
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            className="min-h-10 rounded-xl px-3"
-            onSelect={() => {
-              setErase(false);
-              setConfirmOpen(true);
-            }}
-          >
-            <Trash2 aria-hidden="true" />
-            Delete…
+        ) : null}
+        <DropdownMenuSeparator className="-mx-1.5" />
+        <DropdownMenuItem variant="destructive" className="min-h-10 rounded-xl px-3" onSelect={() => remove(false)}>
+          <Trash2 aria-hidden="true" />
+          {answers > 0 ? "Delete, keep past answers" : "Delete"}
+        </DropdownMenuItem>
+        {answers > 0 ? (
+          <DropdownMenuItem variant="destructive" className="min-h-10 rounded-xl px-3" onSelect={() => remove(true)}>
+            <Eraser aria-hidden="true" />
+            {answers === 1 ? "Delete with its answer" : `Delete with its ${answers} answers`}
           </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <AlertDialog
-        open={confirmOpen}
-        onOpenChange={(next) => {
-          if (!isPending) setConfirmOpen(next);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {answers > 0
-                ? `It leaves your check-in, Settings and Insights. The ${answersLabel(answers)} you already gave stay on their days in History.`
-                : "It leaves your check-in. You haven't answered it yet, so nothing else changes."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {answers > 0 ? (
-            <div className="flex items-start gap-3 rounded-2xl border border-border p-4 text-left">
-              <Checkbox
-                id={eraseId}
-                checked={erase}
-                onCheckedChange={(value) => setErase(value === true)}
-                disabled={isPending}
-                className="mt-0.5"
-              />
-              <Label htmlFor={eraseId} className="block space-y-1 font-normal">
-                <span className="block text-sm font-medium">
-                  Also erase {answers === 1 ? "that answer" : `those ${answers} answers`}
-                </span>
-                <span className="block text-sm text-muted-foreground">
-                  Removes them from every past check-in. This can&apos;t be undone.
-                </span>
-              </Label>
-            </div>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Keep</AlertDialogCancel>
-            <Button type="button" variant="destructive" onClick={confirmDelete} disabled={isPending}>
-              {isPending ? "Deleting…" : erase ? "Delete and erase" : "Delete"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
