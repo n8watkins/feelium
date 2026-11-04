@@ -20,6 +20,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // PREVIEW ONLY: keep the dev badge out of preview screenshots.
+  devIndicators: false,
   turbopack: {
     root: appRoot,
   },

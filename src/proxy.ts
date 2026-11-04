@@ -19,8 +19,13 @@ const { auth } = NextAuth(authConfig);
 const authMiddleware = auth((req) => {
   const isLoggedIn = Boolean(req.auth?.user);
   const isLoginPage = req.nextUrl.pathname === "/login";
-  // Public pages anyone can read before signing in.
-  if (req.nextUrl.pathname === "/privacy") {
+  // Public pages anyone can read before signing in. PREVIEW: the landing page at "/" (the
+  // page itself sends signed-in users to /today) and the redesign screens under /preview/.
+  if (
+    req.nextUrl.pathname === "/privacy" ||
+    req.nextUrl.pathname === "/" ||
+    req.nextUrl.pathname.startsWith("/preview/")
+  ) {
     return NextResponse.next({ request: { headers: req.headers } });
   }
 
