@@ -1,3 +1,4 @@
+import { InstallHint } from "@/components/install-hint";
 import { PageHeader } from "@/components/page-header";
 import { NotificationSettings } from "@/components/notifications/notification-settings";
 import { DEFAULT_TIME_ZONE } from "@/lib/date";
@@ -22,6 +23,8 @@ export default async function NotificationSettingsPage() {
         backLabel="Settings"
       />
       <div className="space-y-6 px-4 pt-2 md:px-8">
+        {/* On a phone browser, reminders need the app on the Home Screen first. */}
+        <InstallHint context="reminders" />
         <NotificationSettings
           initialReminders={reminders}
           timezone={profile?.timezone ?? DEFAULT_TIME_ZONE}

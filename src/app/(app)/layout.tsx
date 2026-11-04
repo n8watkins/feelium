@@ -1,16 +1,17 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { TimezoneSync } from "@/components/timezone-sync";
+import { TopBar } from "@/components/top-bar";
 import { ensureProfile, StaleSessionError } from "@/server/data";
 
 /**
  * Layout for the authenticated app. Guards every child route with a server-side session
  * check (defense in depth alongside the proxy) and ensures the user's profile row exists
- * on first sign-in. Renders the mobile-first shell: desktop sidebar + scrollable main +
- * mobile bottom navigation.
+ * on first sign-in. Renders the shell: a top bar (with the tabs on desktop), the page, and
+ * the bottom tab bar on phones. Pages are 48rem wide; one that marks itself `data-wide`
+ * (Insights) gets 64rem.
  */
 export default async function AppLayout({
   children,
@@ -34,22 +35,19 @@ export default async function AppLayout({
     throw error;
   }
 
+  const name = session.user.name || session.user.email || "You";
   return (
     <>
-      <div className="flex min-h-dvh">
-        <AppSidebar />
-        <div className="flex min-h-dvh flex-1 flex-col">
-          <main className="mx-auto w-full max-w-2xl flex-1 pb-24 md:pb-10">
-            {/* In the page flow, above the content, so it never covers the header or Check in. */}
-            <TimezoneSync
-              currentTimeZone={profile.timezone}
-              shouldSync={profile.autoSyncTimezone}
-            />
-            {children}
-          </main>
-        </div>
-        <BottomNav />
-      </div>
+      <TopBar initial={name.trim().charAt(0).toUpperCase()} />
+      <main className="mx-auto w-full max-w-3xl flex-1 pb-28 has-[[data-wide]]:max-w-5xl md:pb-16">
+        {/* In the page flow, above the content, so it never covers the header or Check in. */}
+        <TimezoneSync
+          currentTimeZone={profile.timezone}
+          shouldSync={profile.autoSyncTimezone}
+        />
+        {children}
+      </main>
+      <BottomNav />
     </>
   );
 }

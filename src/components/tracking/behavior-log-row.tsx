@@ -55,35 +55,33 @@ export function BehaviorLogRow({
 
 function RowShell({
   name,
-  recorded,
+  status,
   children,
   editHref,
 }: {
   name: string;
-  recorded: boolean;
+  status: string;
   children: React.ReactNode;
   editHref?: string;
 }) {
   return (
-    <li className="rounded-lg border border-border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium">{name}</span>
-        <span className="flex items-center gap-1">
-          {!recorded ? (
-            <span className="text-xs text-muted-foreground">Not recorded</span>
-          ) : null}
+    <li className="flex min-h-[72px] items-center justify-between gap-3 rounded-2xl border border-border py-2.5 pr-2.5 pl-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1">
+          <span className="truncate text-[15px] font-medium">{name}</span>
           {editHref ? (
             <Link
               href={editHref}
-              className="inline-flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`Edit ${name}`}
             >
-              <Pencil className="size-4" aria-hidden="true" />
+              <Pencil className="size-3.5" aria-hidden="true" />
             </Link>
           ) : null}
-        </span>
+        </div>
+        <div className="text-xs text-muted-foreground">{status}</div>
       </div>
-      <div className="mt-3">{children}</div>
+      <div className="shrink-0">{children}</div>
     </li>
   );
 }
@@ -123,13 +121,13 @@ function BooleanControl({
   return (
     <RowShell
       name={behavior.name}
-      recorded={value !== null}
+      status={value === null ? "Not recorded" : value ? "Did it" : "Didn't"}
       editHref={editHref}
     >
       <div
         role="group"
         aria-label={behavior.name}
-        className="grid grid-cols-2 gap-2"
+        className="flex rounded-full bg-muted p-1"
       >
         <ChoiceButton
           selected={value === false}
@@ -161,13 +159,13 @@ function ChoiceButton({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex h-10 min-w-14 items-center justify-center gap-1 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-background hover:bg-accent",
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:text-foreground",
       )}
     >
-      {selected ? <Check className="size-4" aria-hidden="true" /> : null}
+      {selected ? <Check className="size-3.5" aria-hidden="true" /> : null}
       {label}
     </button>
   );
@@ -208,7 +206,7 @@ function NumericControl({
   return (
     <RowShell
       name={behavior.name}
-      recorded={value !== null}
+      status={value === null ? "Not recorded" : `${value}${behavior.unit ? ` ${behavior.unit}` : ""}`}
       editHref={editHref}
     >
       <NumericStepper

@@ -1,32 +1,32 @@
-import { ChevronRight, CircleCheck, Plus } from "lucide-react";
+import { CircleCheck, Plus } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { Section } from "@/components/section";
 import { BehaviorLogRow } from "@/components/tracking/behavior-log-row";
 import { CategoryBadge } from "@/components/tracking/category-badge";
-import { SavedCheckInToast } from "@/components/tracking/saved-check-in-toast";
+import { CheckInForm } from "@/components/tracking/check-in-form";
+import { CheckInSaved } from "@/components/tracking/check-in-saved";
 import { Button } from "@/components/ui/button";
-import { BEHAVIOR_CATEGORY_COLOR_STYLES } from "@/config/behavior-categories";
 import { formatOutcomeValue } from "@/config/tracking";
+import { dateISOInTimeZone, DEFAULT_TIME_ZONE, formatTime } from "@/lib/date";
 import {
-  checkInsTodayLabel,
-  dateISOInTimeZone,
-  DEFAULT_TIME_ZONE,
-  formatCheckInMoment,
-} from "@/lib/date";
-import { cn } from "@/lib/utils";
-import {
-  countCheckInsForDate,
-  getEntriesForDate,
-  getLatestCheckIn,
   getCurrentProfile,
+  getDayDetail,
+  getEntriesForDate,
   getTrackingCounts,
   listActiveBehaviors,
+  listActiveOutcomeMetrics,
   listBehaviorCategories,
+  listTags,
 } from "@/server/data";
 
+/**
+ * Today: how you feel right now (the check-in), what you did today (behaviors, saved as
+ * you tap), and today's earlier check-ins. A reminder opens here at #checkin.
+ */
 export default async function TodayPage({
   searchParams,
 }: {
@@ -42,63 +42,76 @@ export default async function TodayPage({
   const profile = await getCurrentProfile();
   const timeZone = profile?.timezone ?? DEFAULT_TIME_ZONE;
   const now = new Date();
-  const heading = now.toLocaleDateString(undefined, {
-    timeZone,
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  const weekday = now.toLocaleDateString("en-US", { timeZone, weekday: "long" });
+  const monthDay = now.toLocaleDateString("en-US", { timeZone, month: "long", day: "numeric" });
   const localDate = dateISOInTimeZone(now, timeZone);
 
-  const [behaviors, categories, entries, checkInsToday, latest] =
-    await Promise.all([
-      listActiveBehaviors(),
-      listBehaviorCategories(),
-      getEntriesForDate(localDate),
-      countCheckInsForDate(localDate),
-      getLatestCheckIn(),
-    ]);
-  const behaviorGroups: {
-    category: (typeof categories)[number] | null;
-    behaviors: typeof behaviors;
-  }[] = categories
+  const [behaviors, categories, entries, outcomes, tags, day] = await Promise.all([
+    listActiveBehaviors(),
+    listBehaviorCategories(),
+    getEntriesForDate(localDate),
+    listActiveOutcomeMetrics(),
+    listTags(),
+    getDayDetail(localDate),
+  ]);
+
+  const groups = categories
     .map((category) => ({
       category,
-      behaviors: behaviors.filter(
-        (behavior) => behavior.categoryId === category.id,
-      ),
+      behaviors: behaviors.filter((behavior) => behavior.categoryId === category.id),
     }))
-    .filter((group) => group.behaviors.length > 0);
+    .filter((group) => group.behaviors.length > 0) as {
+    category: (typeof categories)[number] | null;
+    behaviors: typeof behaviors;
+  }[];
   const uncategorized = behaviors.filter(
-    (behavior) =>
-      !behavior.categoryId ||
-      !categories.some((category) => category.id === behavior.categoryId),
+    (behavior) => !behavior.categoryId || !categories.some((c) => c.id === behavior.categoryId),
   );
-  if (uncategorized.length > 0) {
-    behaviorGroups.push({ category: null, behaviors: uncategorized });
-  }
-
-  const hasCategories = behaviorGroups.some((group) => group.category);
+  if (uncategorized.length > 0) groups.push({ category: null, behaviors: uncategorized });
+  const hasCategories = groups.some((group) => group.category);
+  const checkIns = [...day.checkIns].reverse(); // newest first
 
   return (
     <>
-      {checkin === "saved" ? <SavedCheckInToast /> : null}
-      <PageHeader title="Today" description={heading} />
-      <div className="space-y-6 px-4 pt-2 md:px-8">
-        <Button asChild size="lg" className="h-14 w-full text-base">
-          <Link href="/checkin/new">
-            <Plus className="size-5" aria-hidden="true" />
-            Check in now
-          </Link>
-        </Button>
+      <PageHeader
+        eyebrow={monthDay}
+        title={weekday}
+        action={
+          <p className="text-right text-sm leading-tight text-muted-foreground">
+            <span className="block text-2xl font-semibold text-foreground tabular-nums">
+              {checkIns.length}
+            </span>
+            {checkIns.length === 1 ? "check-in today" : "check-ins today"}
+          </p>
+        }
+      />
+      <div className="grid gap-12 px-4 md:px-8">
+        <Section
+          id="checkin"
+          title="How do you feel right now?"
+          aside={outcomes.length > 0 ? "Tap again to skip" : undefined}
+        >
+          {/* Keyed by today's count, so a saved check-in leaves a fresh, empty form. */}
+          <CheckInForm
+            key={checkIns.length}
+            localDate={localDate}
+            outcomes={outcomes.map((o) => ({
+              id: o.id,
+              name: o.name,
+              inputType: o.inputType,
+              unit: o.unit,
+              desiredDirection: o.desiredDirection,
+            }))}
+            tags={tags.map((t) => ({ id: t.id, name: t.name }))}
+          />
+          <CheckInSaved justSaved={checkin === "saved"} />
+        </Section>
 
-        <section className="space-y-3" aria-labelledby="behaviors-heading">
-          <h2
-            id="behaviors-heading"
-            className="text-sm font-medium text-muted-foreground"
-          >
-            Today&apos;s behaviors
-          </h2>
+        <Section
+          id="behaviors"
+          title="What you did today"
+          aside={behaviors.length > 0 ? "Saved as you tap" : undefined}
+        >
           {behaviors.length === 0 ? (
             <EmptyState
               icon={CircleCheck}
@@ -114,38 +127,19 @@ export default async function TodayPage({
               }
             />
           ) : (
-            <>
-              <div className="space-y-5">
-                {behaviorGroups.map((group) => (
-                  <section
-                    key={group.category?.id ?? "uncategorized"}
-                    aria-labelledby={`behavior-group-${group.category?.id ?? "uncategorized"}`}
-                    className={cn(
-                      "space-y-2",
-                      // Without any categories there is nothing to group: no rail, no label.
-                      !hasCategories
-                        ? ""
-                        : group.category
-                          ? cn("border-l-2 pl-3", BEHAVIOR_CATEGORY_COLOR_STYLES[group.category.color].accent)
-                          : "border-l-2 border-border pl-3",
-                    )}
-                  >
-                    <h3
-                      id={`behavior-group-${group.category?.id ?? "uncategorized"}`}
-                      className={hasCategories ? undefined : "sr-only"}
-                    >
+            <div className="space-y-6">
+              {groups.map((group) => {
+                const groupId = `behavior-group-${group.category?.id ?? "uncategorized"}`;
+                return (
+                  <section key={groupId} aria-labelledby={groupId} className="space-y-2">
+                    <h3 id={groupId} className={hasCategories ? undefined : "sr-only"}>
                       {group.category ? (
-                        <CategoryBadge
-                          name={group.category.name}
-                          color={group.category.color}
-                        />
+                        <CategoryBadge name={group.category.name} color={group.category.color} />
                       ) : (
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Uncategorized
-                        </span>
+                        <span className="text-xs font-medium text-muted-foreground">Uncategorized</span>
                       )}
                     </h3>
-                    <ul className="space-y-2">
+                    <ul className="grid gap-2 md:grid-cols-2">
                       {group.behaviors.map((behavior) => {
                         const entry = entries.get(behavior.id);
                         return (
@@ -166,69 +160,61 @@ export default async function TodayPage({
                       })}
                     </ul>
                   </section>
-                ))}
-              </div>
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/settings/behaviors/new?from=/today">
-                  <Plus className="size-4" aria-hidden="true" />
-                  Add behavior
-                </Link>
-              </Button>
-            </>
+                );
+              })}
+              <Link
+                href="/settings/behaviors/new?from=/today"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Add behavior
+              </Link>
+            </div>
           )}
-        </section>
+        </Section>
 
-        <section className="space-y-3" aria-labelledby="latest-heading">
-          <h2
-            id="latest-heading"
-            className="text-sm font-medium text-muted-foreground"
-          >
-            Latest check-in
-          </h2>
-          {latest ? (
-            <Link
-              href={`/checkin/${latest.checkIn.id}`}
-              className="block rounded-lg border border-border p-4 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {formatCheckInMoment(latest.checkIn.localDate, latest.checkIn.occurredAt, timeZone)}
-                  {" · "}
-                  {checkInsTodayLabel(checkInsToday)}
-                </span>
-                <ChevronRight
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              {latest.values.length > 0 ? (
-                <dl className="mt-3 space-y-1">
-                  {latest.values.map((value) => (
-                    <div
-                      key={value.outcomeMetricId}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <dt className="text-muted-foreground">{value.name}</dt>
-                      <dd className="font-medium tabular-nums">
-                        {formatOutcomeValue(value)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {latest.checkIn.note ?? "Tap to view"}
-                </p>
-              )}
+        <Section
+          id="earlier"
+          title="Earlier today"
+          aside={
+            <Link href="/history" className="font-medium text-foreground underline-offset-4 hover:underline">
+              All days
             </Link>
+          }
+        >
+          {checkIns.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No check-ins yet today. The first one shows up here.
+            </p>
           ) : (
-            <EmptyState
-              icon={CircleCheck}
-              title="No check-ins yet"
-              description="Tap Check in now to record how you feel. Your most recent one will show here."
-            />
+            <ol className="relative ml-1.5 border-l border-border">
+              {checkIns.map((checkIn) => {
+                const values = checkIn.values
+                  .filter((v) => v.rating != null || v.boolean != null || v.numeric != null)
+                  .map((v) => `${v.name} ${formatOutcomeValue(v)}`)
+                  .join(" · ");
+                return (
+                  <li key={checkIn.id} className="relative pb-6 pl-6 last:pb-0">
+                    <span className="absolute top-1.5 -left-[5px] size-[9px] rounded-full bg-foreground" aria-hidden="true" />
+                    <Link
+                      href={`/checkin/${checkIn.id}?from=/today`}
+                      className="group block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="text-sm font-semibold tabular-nums group-hover:underline">
+                        {formatTime(checkIn.occurredAt, timeZone)}
+                      </span>
+                      {values ? <span className="block text-sm text-muted-foreground">{values}</span> : null}
+                      {checkIn.tags.length > 0 ? (
+                        <span className="block text-xs text-muted-foreground">{checkIn.tags.join(", ")}</span>
+                      ) : null}
+                      {checkIn.note ? <span className="mt-1 block text-sm">{checkIn.note}</span> : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
           )}
-        </section>
+        </Section>
       </div>
     </>
   );
