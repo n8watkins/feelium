@@ -55,7 +55,7 @@ export function PreferencesForm({
         const formData = new FormData(event.currentTarget);
         startTransition(() => formAction(formData));
       }}
-      className="space-y-4 border-t border-border pt-4"
+      className="grid gap-4 sm:grid-cols-2"
     >
       <label className="grid gap-1.5 text-sm font-medium">
         Timezone
@@ -66,7 +66,7 @@ export function PreferencesForm({
           onChange={(event) =>
             setTimeZoneSelection({ source: timezone, value: event.target.value })
           }
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+          className="h-11 rounded-full border border-input bg-background px-4 text-[15px] font-normal disabled:opacity-50"
         >
           {!timezones.includes("UTC") ? <option value="UTC">UTC</option> : null}
           {timezones.map((value) => (
@@ -88,7 +88,7 @@ export function PreferencesForm({
               value: event.target.value,
             })
           }
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+          className="h-11 rounded-full border border-input bg-background px-4 text-[15px] font-normal disabled:opacity-50"
         >
           {weekdays.map((day, index) => (
             <option key={day} value={index}>
@@ -97,8 +97,8 @@ export function PreferencesForm({
           ))}
         </select>
       </label>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="outline" disabled={isPending}>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+        <Button type="submit" variant="outline" className="h-10 rounded-full px-5" disabled={isPending}>
           {isPending ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -113,7 +113,7 @@ export function PreferencesForm({
           aria-live="polite"
           className={
             state.status === "error"
-              ? "text-sm text-destructive"
+              ? "text-sm text-red-700 dark:text-destructive"
               : "text-sm text-muted-foreground"
           }
         >

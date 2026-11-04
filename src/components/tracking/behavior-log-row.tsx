@@ -206,7 +206,7 @@ function NumericControl({
   return (
     <RowShell
       name={behavior.name}
-      status={value === null ? "Not recorded" : `${value}${behavior.unit ? ` ${behavior.unit}` : ""}`}
+      status={value === null ? "Not recorded" : "Recorded"}
       editHref={editHref}
     >
       <NumericStepper

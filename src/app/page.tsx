@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
 
+import { auth } from "@/auth";
+import { LandingPage } from "@/components/landing/landing-page";
+
 /**
- * The MVP has no distinct marketing landing page. Send visitors to Today; the proxy
- * redirects unauthenticated users to /login.
+ * "/": the landing page for signed-out visitors; signed-in visitors go straight to Today
+ * (decided on the server from the session cookie, so there is no flash). The installed
+ * app starts at /today and never sees this page.
  */
-export default function RootPage() {
-  redirect("/today");
+export default async function RootPage() {
+  const session = await auth();
+  if (session?.user?.id) redirect("/today");
+  return <LandingPage />;
 }

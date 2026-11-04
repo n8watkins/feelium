@@ -119,3 +119,54 @@ test("Insights shows what stands out, each feeling day by day, and how often eac
   await expect(grids.first()).toHaveAttribute("aria-label", /for each of the last 7 days\./);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });
+
+test("signed out, / is the landing page with the waitlist, and Sign in opens a dialog over it", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("What did I do, how did I feel, and are they connected?");
+  await expect(page.getByRole("link", { name: "Join the waitlist" }).first()).toHaveAttribute("href", "https://n8builds.dev/upcoming?interest=feelium#feelium");
+  const signIn = page.getByRole("button", { name: "Sign in" });
+  await signIn.click();
+  const dialog = page.getByRole("dialog", { name: "Sign in to feelium" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Continue with GitHub" })).toBeFocused();
+  await expect(dialog.locator('input[name="next"]')).toHaveValue("/today");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(signIn).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+});
+
+test("a signed-out visit to an app page opens the sign-in dialog, returning there afterwards", async ({ page }) => {
+  await page.goto("/insights?range=7");
+  await expect(page).toHaveURL(/\/login\?next=%2Finsights%3Frange%3D7$/);
+  const dialog = page.getByRole("dialog", { name: "Sign in to feelium" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('input[name="next"]')).toHaveValue("/insights?range=7");
+  // Closing it leaves you on the landing page.
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("are they connected?");
+});
+
+test("signed in, / goes straight to Today", async ({ context, page }) => {
+  await signIn(context);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/today$/);
+});
+
+test("Settings is one list: account, what you track, reminders, theme and preferences, your data", async ({ context, page }) => {
+  await signIn(context);
+  await page.goto("/settings");
+  for (const name of ["Account", "What you track", "Reminders", "Preferences", "Your data"]) {
+    await expect(page.getByRole("region", { name })).toBeVisible();
+  }
+  await expect(page.getByRole("link", { name: /^Feelings/ })).toHaveAttribute("href", "/settings/outcomes");
+  await expect(page.getByRole("link", { name: /^(Reminders and devices|Set up reminders)/ })).toHaveAttribute("href", "/settings/notifications");
+  const theme = page.getByRole("radiogroup", { name: "Theme" });
+  await theme.getByRole("radio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await expect(theme.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+  await theme.getByRole("radio", { name: "Light" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+});

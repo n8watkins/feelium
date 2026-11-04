@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 
+import { CspNonce } from "@/components/csp-nonce";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -110,6 +111,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <CspNonce nonce={nonce} />
         <ThemeProvider
           nonce={nonce}
           attribute="class"

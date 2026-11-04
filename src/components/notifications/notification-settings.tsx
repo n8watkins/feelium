@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { formatReminderTime } from "@/lib/reminders";
 import {
   createReminderAction,
   deleteReminderAction,
@@ -79,14 +80,6 @@ function toPayload(
     expirationTime: json.expirationTime ?? null,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
   };
-}
-
-function formatReminderTime(value: string): string {
-  const [hour, minute] = value.split(":").map(Number);
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(2000, 0, 1, hour, minute));
 }
 
 export function NotificationSettings({
