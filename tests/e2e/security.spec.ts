@@ -53,6 +53,23 @@ test("pages run under the CSP with no violations, in dark mode too, and send HST
   expect(violations).toEqual([]);
 });
 
+test("signed out, an unknown path is a styled 404, not a detour through sign-in", async ({ page }) => {
+  for (const path of ["/no-such-page", "/wp-admin/setup.php", "/todays"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+    expect(page.url(), path).toBe(`${e2e.baseURL}${path}`);
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go home" })).toHaveAttribute("href", "/");
+    await expect(page.getByRole("button", { name: "Go back" })).toBeVisible();
+  }
+  // The app's own screens still ask you to sign in first.
+  await page.goto("/settings/outcomes");
+  await expect(page).toHaveURL(/\/login\?next=%2Fsettings%2Foutcomes$/);
+  // Analytics and error reporting stay off without their Worker variables.
+  await page.goto("/");
+  await expect(page.locator('script[src*="cloudflareinsights"]')).toHaveCount(0);
+});
+
 test("GitHub is the only way to sign in", async ({ request, page }) => {
   const providers = await (await request.get("/api/auth/providers")).json();
   expect(Object.keys(providers)).toEqual(["github"]);

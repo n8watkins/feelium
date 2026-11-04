@@ -36,9 +36,13 @@
     "APP_ENV": "production",
     // The canonical origin: Auth.js builds its callback URLs from it.
     "AUTH_URL": "https://feelium.n8builds.dev",
-    "VAPID_SUBJECT": "mailto:nathancwatkins23@gmail.com"
+    "VAPID_SUBJECT": "mailto:nathancwatkins23@gmail.com",
+    // Cloudflare Web Analytics site token for n8builds.dev (public: it ships in the page).
+    // src/components/web-analytics.tsx loads the beacon only when this is set.
+    "CF_WEB_ANALYTICS_TOKEN": "50193798ca894b4b8bb4eaa20d01eb8b"
   }
   // Secrets are set with `wrangler secret put <NAME>`, never in this file.
+  // SENTRY_DSN (optional) switches on error reporting; see src/lib/error-reporting.ts.
   // .dev.vars.example lists them (and generates their binding types); local
   // workerd runs read real values from .dev.vars.
 }

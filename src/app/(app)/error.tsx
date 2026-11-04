@@ -4,6 +4,7 @@ import { CircleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { reportError } from "@/components/error-reporting";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -19,8 +20,9 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Surfaced to server logs / monitoring; the user only sees the friendly message.
+    // To the console and, when it's on, Sentry; the user only sees the friendly message.
     console.error(error);
+    reportError(error);
   }, [error]);
 
   return (

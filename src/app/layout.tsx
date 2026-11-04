@@ -3,8 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 
 import { CspNonce } from "@/components/csp-nonce";
+import { ErrorReporting } from "@/components/error-reporting";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WebAnalytics } from "@/components/web-analytics";
 import { Toaster } from "@/components/ui/sonner";
 import { branding } from "@/config/branding";
 import "./globals.css";
@@ -124,6 +126,9 @@ export default async function RootLayout({
           <Toaster mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }} />
           <ServiceWorkerRegistrar />
         </ThemeProvider>
+        {/* Both stay off unless their Worker variables are set (see each component). */}
+        <ErrorReporting dsn={process.env.SENTRY_DSN || undefined} environment={process.env.APP_ENV ?? "development"} />
+        <WebAnalytics token={process.env.CF_WEB_ANALYTICS_TOKEN || undefined} nonce={nonce} />
       </body>
     </html>
   );

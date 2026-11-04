@@ -1,6 +1,7 @@
 import { Compass } from "lucide-react";
 import Link from "next/link";
 
+import { BackButton } from "@/components/back-button";
 import { Button } from "@/components/ui/button";
 
 /** A 404 inside the app (an impossible History date, a deleted check-in): the app's own navigation stays around it. */
@@ -17,9 +18,12 @@ export default function AppNotFound() {
           was mistyped.
         </p>
       </div>
-      <Button asChild>
-        <Link href="/today">Go to Today</Link>
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button asChild>
+          <Link href="/today">Go to Today</Link>
+        </Button>
+        <BackButton fallback="/today" />
+      </div>
     </div>
   );
 }
