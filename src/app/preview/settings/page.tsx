@@ -3,6 +3,7 @@
 // PREVIEW ONLY: Settings as one grouped list; reminders and theme live inline.
 import { useState, type ReactNode } from "react";
 
+import { InstallHint } from "../_install";
 import { Section, Shell } from "../_ui";
 
 function Group({ children }: { children: ReactNode }) {
@@ -65,10 +66,13 @@ export default function PreviewSettings() {
             <Row title="6:30 PM" detail="Every day" right={<Toggle on label="6:30 PM reminder" />} />
             <Row title="9:45 PM" detail="Paused" right={<Toggle on={false} label="9:45 PM reminder" />} />
             <div className="flex items-center justify-between gap-4 px-5 py-3">
-              <span className="text-sm text-[var(--rd-soft)]">This phone gets reminders · 2 devices</span>
-              <button type="button" className="text-sm font-semibold">+ Add a time</button>
+              <span className="min-w-0 text-sm text-[var(--rd-soft)]">On 2 devices, this one included</span>
+              <button type="button" className="shrink-0 whitespace-nowrap text-sm font-semibold">+ Add a time</button>
             </div>
           </Group>
+          <div className="mt-3">
+            <InstallHint context="reminders" />
+          </div>
         </Section>
 
         <Section title="Preferences">

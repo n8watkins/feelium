@@ -1,8 +1,9 @@
 "use client";
 
 // PREVIEW ONLY: Today and check-in as one screen.
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
+import { InstallHint } from "../_install";
 import { Section, Shell } from "../_ui";
 
 const OUTCOMES = [
@@ -105,6 +106,14 @@ function Behavior({ b }: { b: (typeof BEHAVIORS)[number] }) {
 
 export default function PreviewToday() {
   const [tags, setTags] = useState<string[]>(["Work"]);
+  // After the first check-in, a one-time nudge to install (for reminders). `?saved=1` shows it.
+  const [savedNow, setSaved] = useState(false);
+  const savedParam = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(location.search).get("saved") === "1",
+    () => false,
+  );
+  const saved = savedNow || savedParam;
   return (
     <Shell>
       <div className="mb-10 flex items-end justify-between gap-4">
@@ -145,10 +154,15 @@ export default function PreviewToday() {
             </div>
           </div>
           <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-4 bg-gradient-to-t from-[var(--rd-bg)] from-60% px-4 pb-3 pt-6 md:static md:mx-0 md:bg-none md:p-0">
-            <button type="button" className="h-12 w-full rounded-full bg-[var(--rd-ink)] text-[15px] font-semibold text-[var(--rd-bg)] md:w-auto md:px-8">
-              Save check-in
+            <button type="button" onClick={() => setSaved(true)} className="h-12 w-full rounded-full bg-[var(--rd-ink)] text-[15px] font-semibold text-[var(--rd-bg)] md:w-auto md:px-8">
+              {saved ? "Saved · 4:12 PM" : "Save check-in"}
             </button>
           </div>
+          {saved ? (
+            <div id="install-nudge" className="mt-4 scroll-mt-20">
+              <InstallHint context="nudge" />
+            </div>
+          ) : null}
         </Section>
 
         <Section title="What you did today" aside={<span className="text-xs text-[var(--rd-soft)]">Saved as you tap</span>}>

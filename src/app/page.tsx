@@ -156,6 +156,27 @@ export default async function RootPage() {
                 </li>
               ))}
             </ul>
+            <div className="mt-16 grid items-center gap-10 md:grid-cols-[1fr_1.2fr]">
+              <div className="max-w-md">
+                <h3 className="text-2xl font-semibold tracking-tight">On your Home Screen, like an app</h3>
+                <p className="mt-3 text-muted-foreground">
+                  There&apos;s nothing to download from a store. On an iPhone, add it from Safari&apos;s
+                  Share menu; on Android, Chrome offers Install app. It opens full screen, and
+                  reminders arrive like any app&apos;s notifications.
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">Reminders on iPhone need iOS 16.4 or later.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <figure>
+                  <Phone src="/welcome/install-ios.png" alt="On iPhone: the steps to add feelium to the Home Screen from Safari" className="rounded-[1.5rem]" />
+                  <figcaption className="mt-3 text-sm text-muted-foreground">iPhone and iPad, in Safari</figcaption>
+                </figure>
+                <figure>
+                  <Phone src="/welcome/install-android-phone.png" alt="On Android: the Install app button" className="rounded-[1.5rem]" />
+                  <figcaption className="mt-3 text-sm text-muted-foreground">Android, in Chrome</figcaption>
+                </figure>
+              </div>
+            </div>
           </div>
         </section>
 

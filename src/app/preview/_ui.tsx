@@ -35,8 +35,8 @@ export function Shell({ children, wide = false }: { children: ReactNode; wide?: 
   const pathname = usePathname();
   return (
     <div className="rd min-h-dvh bg-[var(--rd-bg)] text-[var(--rd-ink)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--rd-line)] bg-[var(--rd-bg)]/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-8 px-4 md:px-8">
+      <header className="sticky top-0 z-20 border-b border-[var(--rd-line)] bg-[var(--rd-bg)]/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-8 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] md:px-8">
           <Link href="/preview/today" className="flex items-center gap-2 font-semibold tracking-tight">
             <Mark /> feelium
           </Link>
