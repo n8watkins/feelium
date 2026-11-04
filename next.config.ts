@@ -28,7 +28,6 @@ const nextConfig: NextConfig = {
   // Turbopack parsing quirks); they run only in the Node server runtime.
   serverExternalPackages: [
     "@libsql/client",
-    "bcryptjs",
     "@auth/drizzle-adapter",
   ],
   async headers() {

@@ -88,13 +88,13 @@ The `*-operations.ts` modules are kept **session-free** on purpose so integratio
 ### Auth flow
 
 - `src/auth.ts` builds NextAuth with the DrizzleAdapter and a single provider today: **GitHub OAuth**.
-- The magic-link and email/password providers are commented out but preserved, with a re-enable note at the top of the file.
+- Email sign-in (magic link and password) was removed on 2026-11-03; GitHub is the only provider (DEVIATIONS ADR-002).
 - `src/auth.config.ts` is the dependency-light, edge-safe config (JWT strategy, session callback that copies the user id onto the token/session). It is shared with `src/proxy.ts`, the route guard.
-- Session strategy is **JWT** (required by the credentials provider and honored by the others). The token carries `id`; the session callback surfaces it as `session.user.id`.
+- Session strategy is **JWT**. The token carries `id`; the session callback surfaces it as `session.user.id`.
 
 ### Database schema (`src/db/schema/`)
 
-Auth tables (adapter): `user` (includes a `passwordHash` column for the disabled credentials flow), `account`, `sessions`, `verification_token`.
+Auth tables (adapter): `user` (its `password_hash` column is unused since email sign-in was removed, kept to avoid a table rebuild), `account`, `sessions`, `verification_token` (empty).
 
 Product tables:
 
@@ -200,7 +200,6 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 
 ### Deferred follow-ups (known, scoped)
 
-- **Re-enable email magic-link + password sign-in** once a verified Resend sender domain (or another email transport) is in place. Everything is preserved and reversible - follow the re-enable note in `src/auth.ts` and restore the login UI in `src/app/login/page.tsx`. See `docs/DEVIATIONS.md` ADR-002.
 - **Whole-number vs decimal numeric steppers.** Numeric inputs could distinguish integer-only quantities (e.g. cups) from decimals (e.g. hours) for a nicer stepper experience.
 - **Upgrade next-auth v5 from beta to the stable release** when it lands, and drop the beta pin.
 - **Complete the PWA PNG icon set.** Add any remaining resolutions/variants for full install fidelity across platforms (the generator is `scripts/generate-pwa-icons.mjs`, driven by the single SVG).
@@ -227,7 +226,7 @@ These are intentionally out of scope for the MVP and should only be built once t
 
 ## 6. Known limitations and gotchas
 
-- **Sign-in is GitHub-only.** The seeded `demo@example.com` / password account no longer works because the credentials provider is disabled. Local dev now requires GitHub OAuth credentials to log in at all.
+- **Sign-in is GitHub-only.** Local dev needs GitHub OAuth credentials to sign in; the e2e tests mint a session for the seeded `demo@example.com` user instead.
 - **Turso + serverless transactions (the P0 lesson).** An interactive `db.transaction()` does **not** reliably commit over Turso/libSQL HTTP in a serverless runtime (first seen on Vercel, and the same on Workers): the connection is not sticky, so the `COMMIT` can be dropped and the whole write silently rolls back ("check-in saved but nothing persists"). The fix, and the rule going forward, is to use a single atomic `db.batch()` for multi-statement writes. See `src/server/data/checkin-writes.ts` and `tests/checkin-persistence.test.ts`.
 - **Production has no seed/demo data.** Turso in prod starts empty; every account is a fresh GitHub sign-in. `npm run db:seed` is local-only.
 - **Migrations are manual against Turso.** They are not run during `next build`. Apply schema changes explicitly (section 3).

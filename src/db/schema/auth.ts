@@ -7,7 +7,8 @@ import type { AdapterAccountType } from "next-auth/adapters";
  *
  * We use JWT sessions, so the `sessions` table is never written to - but the adapter's
  * type contract still expects it to exist, so it stays defined and migrated.
- * `verificationTokens` IS used by the magic-link flow and is required.
+ * `verificationTokens` is unused since email sign-in was removed (GitHub only); the table stays
+ * because the adapter's type contract expects it, and it is empty.
  */
 
 export const users = sqliteTable("user", {
@@ -20,8 +21,8 @@ export const users = sqliteTable("user", {
   image: text("image"),
   // Bumped by "Sign out on every device"; a session minted under an older value is refused.
   sessionVersion: integer("session_version").notNull().default(0),
-  // Added for the optional email + password (Credentials) flow. Nullable: magic-link-only
-  // users never set a password.
+  // Unused since email/password sign-in was removed (GitHub only). The column stays because
+  // dropping it means SQLite rebuilding the user table every other table references.
   passwordHash: text("password_hash"),
 });
 

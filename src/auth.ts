@@ -8,58 +8,8 @@ import { getDb } from "@/db";
 import { withoutOAuthTokens } from "@/lib/oauth-account";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 
-// ---------------------------------------------------------------------------
-// TEMPORARILY DISABLED: password + magic-link sign-in (GitHub is currently the only way in).
-//
-// Why: production only has the GitHub OAuth callback wired up, and Resend on the current
-// plan can only email the account owner, so the magic-link flow is broken for everyone
-// else. Until the Resend sender domain / plan is sorted, GitHub OAuth is the sole provider.
-//
-// To RE-ENABLE: uncomment the imports and the emailProvider definition below, add
-// `emailProvider` and the `Credentials({...})` entry back into the `providers` array, and
-// restore the email/password + magic-link UI in src/app/login/page.tsx. The flows
-// (sendMagicLink / signInWithPassword / signUpWithPassword) are kept in
-// src/server/auth/email-sign-in.ts, deliberately outside any "use server" module; read
-// its note first (sign-up must verify the email before creating the account).
-// ---------------------------------------------------------------------------
-// import bcrypt from "bcryptjs";
-// import { eq } from "drizzle-orm";
-// import type { EmailConfig } from "next-auth/providers";
-// import Credentials from "next-auth/providers/credentials";
-// import Resend from "next-auth/providers/resend";
-
-// const isProduction = process.env.NODE_ENV === "production";
-
-// Sender for magic-link emails. Override with AUTH_EMAIL_FROM in production; the default is
-// Resend's shared testing sender, which only delivers to the Resend account owner - real
-// production sending needs a verified sender domain configured in Resend and set here.
-// const EMAIL_FROM = process.env.AUTH_EMAIL_FROM ?? "feelium <onboarding@resend.dev>";
-
-/**
- * The magic-link email provider, selected by environment but exposed under a single stable
- * provider id ("email") so the login action calls `signIn("email", ...)` in both:
- *   - Production: Resend sends the real email (reads AUTH_RESEND_KEY).
- *   - Development: a dependency-free EmailConfig prints the sign-in URL to the server
- *     console, so no SMTP transport or email account is needed locally.
- */
-// const developmentEmailProvider: EmailConfig = {
-//   id: "email",
-//   type: "email",
-//   name: "Email",
-//   from: EMAIL_FROM,
-//   maxAge: 24 * 60 * 60,
-//   async sendVerificationRequest({ identifier, url }) {
-//     console.log(
-//       "\n============================================================\n" +
-//         `  Magic sign-in link for ${identifier}:\n  ${url}\n` +
-//         "============================================================\n",
-//     );
-//   },
-// };
-//
-// const emailProvider = isProduction
-//   ? Resend({ id: "email", apiKey: process.env.AUTH_RESEND_KEY, from: EMAIL_FROM })
-//   : developmentEmailProvider;
+// GitHub OAuth is the only way to sign in (owner decision, 2026-11-03: email magic-link and
+// email/password sign-in were removed, along with Resend; see docs/DEVIATIONS.md ADR-002).
 
 /**
  * The Drizzle adapter, except that GitHub's OAuth tokens are never stored: Feelium never
@@ -85,40 +35,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
     // Social sign-in: GitHub OAuth. Auth.js auto-reads AUTH_GITHUB_ID / AUTH_GITHUB_SECRET.
     // The Drizzle adapter creates and links the user/account rows.
     GitHub,
-    // --- DISABLED (re-enable per the note at the top of this file) ---
-    // DEFAULT sign-in: email magic link (see emailProvider above).
-    // emailProvider,
-    // Optional email + password (PRD 11.1). Passwords are bcrypt-hashed in the DB.
-    // Credentials({
-    //   credentials: {
-    //     email: { label: "Email", type: "email" },
-    //     password: { label: "Password", type: "password" },
-    //   },
-    //   async authorize(credentials) {
-    //     const email =
-    //       typeof credentials?.email === "string" ? credentials.email : "";
-    //     const password =
-    //       typeof credentials?.password === "string" ? credentials.password : "";
-//     if (!email || !password) return null;
-//
-//     const [user] = await getDb()
-//       .select()
-//       .from(users)
-    //       .where(eq(users.email, email))
-    //       .limit(1);
-    //
-    //     if (!user?.passwordHash) return null;
-    //
-    //     const valid = await bcrypt.compare(password, user.passwordHash);
-    //     if (!valid) return null;
-    //
-    //     return {
-    //       id: user.id,
-    //       email: user.email,
-    //       name: user.name,
-    //       image: user.image,
-    //     };
-    //   },
-    // }),
   ],
 }));

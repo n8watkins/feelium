@@ -52,3 +52,12 @@ test("pages run under the CSP with no violations, in dark mode too, and send HST
 
   expect(violations).toEqual([]);
 });
+
+test("GitHub is the only way to sign in", async ({ request, page }) => {
+  const providers = await (await request.get("/api/auth/providers")).json();
+  expect(Object.keys(providers)).toEqual(["github"]);
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByText(/password|magic link|email me/i)).toHaveCount(0);
+});

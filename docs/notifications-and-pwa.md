@@ -98,7 +98,7 @@ Subscriptions are limited (`src/lib/push-endpoints.ts`):
 ## Local testing
 
 1. Copy `.env.local.example` to `.env.local` and fill in the VAPID keys, a `CRON_SECRET`, and `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` (GitHub is the only sign-in method - see [DEVIATIONS ADR-002](DEVIATIONS.md)).
-2. `npm run db:migrate` then `npm run db:seed` for demo tracking data. (The seeded `demo@example.com` password login no longer works - sign in with GitHub.)
+2. `npm run db:migrate` then `npm run db:seed` for demo tracking data, then sign in with GitHub.
 3. `npm run dev -- -p 3002` (or any port).
 4. Sign in with GitHub, open `Settings > Notifications`, add at least two reminder times, and set up the current device.
 5. Trigger a scheduled send locally:

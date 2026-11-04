@@ -29,3 +29,13 @@ test("no server action can create an account or sign in without GitHub", () => {
   }
   assert.ok(exported.includes("signInWithGitHub"));
 });
+
+test("email sign-in is gone: no email or password provider, and no Resend or bcrypt dependency", () => {
+  const auth = readFileSync("src/auth.ts", "utf8");
+  assert.doesNotMatch(auth, /next-auth\/providers\/(resend|email|nodemailer|credentials)/);
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  for (const name of ["resend", "bcryptjs", "@types/bcryptjs", "nodemailer"]) {
+    assert.equal(name in deps, false, `${name} is still a dependency`);
+  }
+});

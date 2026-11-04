@@ -56,8 +56,8 @@ Account and data deletion remain achievable via `on delete cascade` foreign keys
 ## ADR-002: Sign-in temporarily reduced to GitHub OAuth only
 
 **Date:** 2026-07-10
-**Status:** Accepted (temporary; reversible)
-**Decision by:** General (fleet), post-deploy.
+**Status:** Accepted; made permanent on 2026-11-03 (see Update below)
+**Decision by:** General (fleet), post-deploy; the owner, 2026-11-03.
 **Supersedes (in part):** ADR-001's "Email magic link is the default sign-in" for the deployed configuration.
 
 ### Context
@@ -68,25 +68,22 @@ The GitHub OAuth callback is the only auth path fully wired up in production.
 
 ### Decision
 
-**GitHub OAuth is the sole enabled sign-in provider**, in both production and local development.
-The email magic-link and email/password providers are **disabled but preserved and reversible**:
+**GitHub OAuth is the only sign-in provider**, in both production and local development.
 
-- `src/auth.ts` keeps the magic-link (`emailProvider`) and `Credentials` provider definitions commented out, with a re-enable note at the top of the file.
-- The flows (`sendMagicLink`, `signInWithPassword`, `signUpWithPassword`) are kept in `src/server/auth/email-sign-in.ts`, which is deliberately not a `"use server"` module: as server actions they stayed callable by a POST, and sign-up created accounts (2026-11-03 audit).
-  Re-enabling means wrapping them in server actions again, and sign-up must verify the email before it creates the account.
-- `src/app/login/page.tsx` shows only the "Continue with GitHub" button; the email/password + magic-link UI was removed but is documented as the only thing to restore.
+### Update, 2026-11-03: email sign-in removed
+
+The owner decided to remove email sign-in entirely rather than keep it disabled.
+The email magic-link (Resend) and email/password (Credentials) providers, their flows, the Resend and `bcryptjs` dependencies, and `AUTH_RESEND_KEY` / `AUTH_EMAIL_FROM` are gone from the code, the docs and the Worker.
+Two pieces of schema stay, on purpose:
+
+- `user.password_hash` is unused; dropping it would make SQLite rebuild the `user` table that `account` and every user-owned table reference, a migration with real data risk for no gain.
+- `verification_token` is empty and unused; it stays because the Drizzle adapter's type contract expects it.
 
 ### Consequences
 
-- **Local development now requires GitHub OAuth credentials** (`AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`) to sign in at all; the "magic link printed to the console" convenience is unavailable while the provider is disabled.
-- The seed script (`npm run db:seed`) still creates a `demo@example.com` password account, but that login no longer works because the credentials provider is off. The seeded tracking data remains useful for local History/Insights.
-- `AUTH_RESEND_KEY` / `AUTH_EMAIL_FROM` are not required while magic-link is disabled.
-
-### Re-enabling
-
-When a verified Resend sender domain (or an alternative email transport) is available, follow the re-enable note in `src/auth.ts`: uncomment the provider imports and definitions, add them back to the `providers` array, and restore the email/password + magic-link UI in `src/app/login/page.tsx`.
-The development provider is a plain Auth.js `EmailConfig` that prints links to the server console, so restoring it does not require Nodemailer or an SMTP dependency.
-No server-side rewrite is needed.
+- Local development needs GitHub OAuth credentials (`AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`) to sign in; tests sign in with a minted session instead (see `tests/e2e`).
+- The seed script creates the `demo@example.com` user without a password; its tracking data is for local History and Insights.
+- Bringing email sign-in back would be new work: a provider, a verified sender domain, and a sign-up that verifies the address before creating the account.
 
 ## ADR-003: CSP permits style attributes for Sonner runtime geometry
 

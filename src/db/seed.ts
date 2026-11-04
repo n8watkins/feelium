@@ -6,14 +6,12 @@
 // clobber data the demo has accumulated. To start completely fresh, `npm run db:reset`
 // then `npm run db:seed`.
 import { createClient } from "@libsql/client";
-import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "./schema";
 
 const DEMO_EMAIL = "demo@example.com";
-const DEMO_PASSWORD = "demo12345";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -275,10 +273,9 @@ async function ensureUser(db: Db): Promise<string> {
     .limit(1);
   if (existing) return existing.id;
 
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const [user] = await db
     .insert(schema.users)
-    .values({ email: DEMO_EMAIL, passwordHash })
+    .values({ email: DEMO_EMAIL })
     .returning({ id: schema.users.id });
   await db.insert(schema.profiles).values({ userId: user.id });
   return user.id;
@@ -451,7 +448,7 @@ async function main() {
   await ensureTags(db, userId);
   await ensureHistory(db, userId);
 
-  console.log(`Demo account ready: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`Demo account ready: ${DEMO_EMAIL} (sign in to it locally with a minted session, see tests/e2e)`);
   client.close();
 }
 
