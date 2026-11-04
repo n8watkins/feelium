@@ -16,6 +16,7 @@ import {
   InputTypeLockedError,
   moveBehavior,
   reactivateBehavior,
+  unarchiveBehavior,
   updateBehavior,
   type BehaviorInput,
 } from "@/server/data";
@@ -162,6 +163,14 @@ export async function updateBehaviorAction(
 export async function archiveBehaviorAction(formData: FormData) {
   await archiveBehavior(String(formData.get("id") ?? ""));
   revalidatePath(LIST_PATH);
+  revalidatePath("/today");
+}
+
+/** The Undo after archiving: puts it back where it was. */
+export async function unarchiveBehaviorAction(formData: FormData) {
+  await unarchiveBehavior(String(formData.get("id") ?? ""));
+  revalidatePath(LIST_PATH);
+  revalidatePath("/today");
 }
 
 export async function reactivateBehaviorAction(formData: FormData) {

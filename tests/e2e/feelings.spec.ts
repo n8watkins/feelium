@@ -136,15 +136,24 @@ test("feelings can be added, renamed, reordered, archived and deleted without lo
     await page.locator("[data-sonner-toast]").filter({ hasText: "Calm archived" }).getByRole("button", { name: "Undo" }).click();
     await expect(page.getByRole("button", { name: "Move Calm up" })).toBeVisible();
 
+    // Delete with its answer, then Undo: it's back, answer included.
+    await page.getByRole("button", { name: "More for Calm" }).click();
+    await page.getByRole("menuitem", { name: "Delete with its answer" }).click();
+    const erasedToast = page.locator("[data-sonner-toast]").filter({ hasText: "Calm deleted" });
+    await expect(erasedToast).toContainText("Its answer was erased too.");
+    await expect(page.getByRole("button", { name: "Move Calm up" })).toHaveCount(0);
+    await erasedToast.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByRole("button", { name: "Move Calm up" })).toBeVisible();
+    await expect(
+      database.execute({ sql: "select rating_value from check_in_value where id = 'e2e-calm-value'", args: [] }).then((r) => r.rows[0]?.rating_value),
+    ).resolves.toBe(2);
+
     // Delete, keeping the answer: gone from Settings and the check-in, still on the day.
     await page.getByRole("button", { name: "More for Calm" }).click();
-    await page.getByRole("menuitem", { name: /Delete/ }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Delete Calm?" });
-    await expect(dialog).toContainText("The 1 answer you already gave stay");
-    await expect(dialog.getByRole("checkbox", { name: /Also erase that answer/ })).not.toBeChecked();
-    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Calm deleted" })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Delete, keep past answers" }).click();
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Calm deleted" }).last()).toContainText(
+      "Your past answers stay on their days in History.",
+    );
     await expect(page.getByText("Calm", { exact: true })).toHaveCount(0);
     await page.goto("/today");
     await expect(checkIn.getByRole("group", { name: "Calm" })).toHaveCount(0);

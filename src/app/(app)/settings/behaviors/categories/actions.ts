@@ -93,9 +93,9 @@ export async function moveCategoryAction(
   return { ok: true };
 }
 
-export async function deleteCategoryAction(id: string): Promise<CategoryFormState> {
+export async function deleteCategoryAction(id: string): Promise<CategoryFormState & { undoId?: string }> {
   const deleted = await deleteBehaviorCategory(id);
   if (!deleted) return { error: "That category no longer exists." };
   revalidateCategoryPaths();
-  return { ok: true };
+  return { ok: true, undoId: deleted.undoId };
 }

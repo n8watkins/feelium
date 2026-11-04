@@ -11,12 +11,18 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import * as schema from "@/db/schema";
 import {
   createBehaviorCategoryForUser,
-  deleteBehaviorCategoryForUser,
   listBehaviorCategoriesForUser,
   moveBehaviorCategoryForUser,
   resolveOwnedBehaviorCategoryId,
   updateBehaviorCategoryForUser,
 } from "@/server/data/behavior-category-operations";
+import { deleteCategoryWithUndo } from "@/server/data/undo-operations";
+
+const deleteBehaviorCategoryForUser = async (
+  database: Parameters<typeof deleteCategoryWithUndo>[0],
+  userId: string,
+  id: string,
+) => (await deleteCategoryWithUndo(database, userId, id)) !== null;
 import {
   deleteAllTrackingDataForUser,
   exportUserDataForUser,

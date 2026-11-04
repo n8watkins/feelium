@@ -18,20 +18,10 @@ import {
   updateCategoryAction,
   type CategoryFormState,
 } from "@/app/(app)/settings/behaviors/categories/actions";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toastDeleted } from "@/components/undo-toast";
 import {
   BEHAVIOR_CATEGORY_COLORS,
   BEHAVIOR_CATEGORY_COLOR_LABELS,
@@ -136,6 +126,9 @@ function CategoryRow({
     startTransition(async () => {
       const result = await deleteCategoryAction(category.id);
       if (result.error) toast.error(result.error);
+      else if (result.undoId) {
+        toastDeleted(`“${category.name}” deleted`, result.undoId, "Its behaviors are uncategorized now.");
+      }
     });
   }
 
@@ -213,32 +206,16 @@ function CategoryRow({
           >
             <ChevronDown className="size-4" aria-hidden="true" />
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                disabled={busy}
-                aria-label={`Delete ${category.name}`}
-              >
-                <Trash2 className="size-4" aria-hidden="true" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete “{category.name}”?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The category will be removed. Its behaviors will be kept and become
-                  uncategorized.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={remove}>Delete category</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            onClick={remove}
+            disabled={busy}
+            aria-label={`Delete ${category.name}`}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+          </Button>
           <p
             role={state.error ? "alert" : "status"}
             className={state.error ? "ml-2 text-sm text-destructive" : "ml-2 text-sm text-muted-foreground"}

@@ -124,6 +124,15 @@ export async function archiveBehavior(id: string) {
     .where(and(eq(behaviors.id, id), eq(behaviors.userId, userId)));
 }
 
+/** Undoes an archive: back on Today in the place it had (archiving keeps its sort order). */
+export async function unarchiveBehavior(id: string) {
+  const userId = await requireUserId();
+  await db
+    .update(behaviors)
+    .set({ isActive: true, archivedAt: null })
+    .where(and(eq(behaviors.id, id), eq(behaviors.userId, userId)));
+}
+
 export async function reactivateBehavior(id: string) {
   const userId = await requireUserId();
   const sortOrder = await nextActiveSortOrder(userId);

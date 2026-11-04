@@ -4,7 +4,6 @@ import type { BehaviorCategoryColor } from "@/config/behavior-categories";
 import { db } from "@/db";
 import {
   createBehaviorCategoryForUser,
-  deleteBehaviorCategoryForUser,
   listBehaviorCategoriesForUser,
   moveBehaviorCategoryForUser,
   updateBehaviorCategoryForUser,
@@ -30,6 +29,3 @@ export async function moveBehaviorCategory(id: string, direction: "up" | "down")
   return moveBehaviorCategoryForUser(db, await requireUserId(), id, direction);
 }
 
-export async function deleteBehaviorCategory(id: string) {
-  return deleteBehaviorCategoryForUser(db, await requireUserId(), id);
-}
