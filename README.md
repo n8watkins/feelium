@@ -7,7 +7,7 @@ This repository implements the **full MVP** per `docs/PRD.md` - all seven phases
 It is **deployed and live** at [feelium.n8builds.dev](https://feelium.n8builds.dev) on Cloudflare Workers.
 Local development runs entirely offline against a plain SQLite file; deployments use a cloud Turso database.
 
-> **Sign-in is currently GitHub OAuth only.** The email magic-link and email/password providers are built and preserved but temporarily disabled (see [Signing in](#signing-in), [`src/auth.ts`](src/auth.ts), and [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002).
+> **Sign-in is GitHub OAuth only.** Email sign-in was removed (see [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002).
 
 > The stack deviates from the PRD's Supabase/Postgres/RLS recommendation. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) for the decision record.
 
@@ -19,7 +19,7 @@ Local development runs entirely offline against a plain SQLite file; deployments
 - **Tailwind CSS v4** + **shadcn/ui** (Radix primitives, Lucide icons)
 - **next-themes** for light / dark / system theming
 - **Turso libSQL** (SQLite-compatible) with **Drizzle ORM** - local dev uses a plain SQLite file
-- **Auth.js / NextAuth v5** with the Drizzle adapter (currently GitHub OAuth; magic link + password preserved but disabled)
+- **Auth.js / NextAuth v5** with the Drizzle adapter (GitHub OAuth only)
 - **App-layer authorization**: all DB access is server-side and scoped to the session user
 - Deployed on **Cloudflare Workers** (OpenNext) with a cloud **Turso** database
 
@@ -72,7 +72,7 @@ Local development runs entirely offline against a plain SQLite file; deployments
 3. The session is created and you land on `/today`.
    A profile row (with timezone and start of week) is created automatically on first sign-in.
 
-> **Why GitHub-only?** Production only has the GitHub callback wired up, and Resend on the current plan can only email the account owner, so the magic-link flow was broken for everyone else. The email magic-link and email/password providers are fully built and **reversible** - the flows are kept in `src/server/auth/email-sign-in.ts` (not a server-action module, so they can't be called while disabled) and the providers are commented in `src/auth.ts` with a re-enable note. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002.
+> **Why GitHub-only?** Email sign-in depended on Resend, which on the current plan could only email the account owner; the owner removed it on 2026-11-03. See [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002.
 
 ## Scripts
 
@@ -98,7 +98,7 @@ Local development runs entirely offline against a plain SQLite file; deployments
 GitHub Actions runs install, lint, type checking, unit tests, atomic data-operation tests, category integration tests, authenticated Chromium flows, fresh and upgrade migrations, real Turso HTTP persistence, and the production build for every pull request and push to `main`.
 The lower-level `test:persistence` command still accepts `TEST_LIBSQL_URL` when you want to exercise a separately managed disposable libSQL or Turso database.
 
-> `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for local exploration. It also creates a `demo@example.com` password account, but that password login no longer works because the credentials provider is disabled (GitHub-only). The seeded tracking data is still useful for exercising History and Insights locally.
+> `npm run db:seed` populates demo behaviors, outcomes, and historical check-ins for a `demo@example.com` user, for exploring History and Insights locally (sign in to it with a minted session, as the e2e tests do).
 
 ## Hosting on Cloudflare Workers
 
@@ -155,8 +155,7 @@ The same migration files in `drizzle/` apply to both local SQLite and cloud Turs
 
 ### OAuth and email in production
 
-- Add the production callback URL `https://<your-domain>/api/auth/callback/github` to the GitHub OAuth app (alongside the local one). This is the only sign-in method currently enabled.
-- **Email magic link is currently disabled** and Resend is not required. If you re-enable the email provider (see [`docs/DEVIATIONS.md`](docs/DEVIATIONS.md) ADR-002), Resend requires a **verified sender domain**; set `AUTH_EMAIL_FROM` to an address on that domain. The default (`feelium <onboarding@resend.dev>`) is Resend's shared testing sender and only delivers to the Resend account owner - which is exactly why magic-link was disabled.
+- Add the production callback URL `https://<your-domain>/api/auth/callback/github` to the GitHub OAuth app (alongside the local one). This is the only sign-in method.
 
 ### Production environment variables
 
@@ -171,8 +170,6 @@ Set the secrets on the Worker with `npx wrangler secret put NAME` (never commit 
 | `TURSO_AUTH_TOKEN`   | Yes      | Yes    | Turso database auth token.                                                                     |
 | `AUTH_GITHUB_ID`     | Yes      | No     | GitHub OAuth app client ID (public). Required - GitHub is the only sign-in method.             |
 | `AUTH_GITHUB_SECRET` | Yes      | Yes    | GitHub OAuth app client secret.                                                               |
-| `AUTH_RESEND_KEY`    | No       | Yes    | Resend API key for magic-link emails. Not needed while magic-link is disabled.                |
-| `AUTH_EMAIL_FROM`    | No       | No     | From address for magic-link emails (verified Resend domain). Only relevant if magic-link is re-enabled. Defaults to `feelium <onboarding@resend.dev>`. |
 
 `DATABASE_URL` is not used in production when the `TURSO_*` variables are set.
 Web Push notifications additionally need `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and `CRON_SECRET` - see [`docs/notifications-and-pwa.md`](docs/notifications-and-pwa.md).
@@ -185,7 +182,7 @@ src/
     (app)/                # Authenticated app shell (bottom nav + sidebar)
       today/ history/ insights/ settings/
     api/                  # Route handlers: auth, account export/signout, notifications/send
-    login/                # Sign-in (GitHub OAuth; magic-link/password UI disabled)
+    login/                # Sign-in (GitHub OAuth)
     onboarding/           # First-run starter behaviors/outcomes
     layout.tsx            # Root layout: theme provider, fonts, metadata
     manifest.ts           # PWA manifest (reads from branding config)

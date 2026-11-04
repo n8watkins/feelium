@@ -7,15 +7,13 @@ import { authLogger } from "@/lib/log";
  * secrets, or Node-only modules, so it can be imported by the proxy (route guard) as
  * well as by the full `auth.ts`.
  *
- * JWT session strategy is required because the Credentials provider only works with JWT
- * sessions; the Email/magic-link provider honors JWT too and uses the adapter solely for
- * verification-token storage.
+ * Sessions are JWTs (no database session lookups); the Drizzle adapter in auth.ts stores
+ * users and their linked GitHub accounts.
  */
 const authConfig = {
   pages: {
     signIn: "/login",
     error: "/login",
-    verifyRequest: "/login?sent=1",
   },
   session: { strategy: "jwt" },
   // Production runs on Cloudflare Workers behind Cloudflare's proxy, so trust the forwarded
@@ -25,7 +23,7 @@ const authConfig = {
   trustHost: true,
   // Error type and a masked message only; see src/lib/log.ts.
   logger: authLogger,
-  // Providers are added in `auth.ts` (they pull in the DB adapter and bcrypt).
+  // Providers are added in `auth.ts` (GitHub only; it needs the DB adapter).
   providers: [],
   callbacks: {
     jwt({ token, user }) {

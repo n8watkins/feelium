@@ -33,10 +33,7 @@ export default async function LoginPage({
 }) {
   const { error, next } = await searchParams;
 
-  // NOTE: Email/password + magic-link sign-in are temporarily disabled - GitHub OAuth is
-  // currently the only provider (see the re-enable note in src/auth.ts). The corresponding
-  // fields, magic-link status, and create-account flow were removed from this page; the
-  // server actions still live in ./actions, so restoring the UI is the only step here.
+  // GitHub is the only sign-in (see src/auth.ts).
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm space-y-6">
