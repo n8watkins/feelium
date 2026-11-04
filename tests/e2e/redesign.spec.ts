@@ -170,3 +170,22 @@ test("Settings is one list: account, what you track, reminders, theme and prefer
   await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });
+
+test("the landing page's screens all load, and laptop mockups only show where they're legible", async ({ page }, testInfo) => {
+  await page.goto("/");
+  // Bring every lazy image into view, then check each one decoded.
+  for (let y = 0; y < (await page.evaluate(() => document.body.scrollHeight)); y += 500) {
+    await page.evaluate((top) => scrollTo(0, top), y);
+  }
+  await page.waitForLoadState("networkidle");
+  const broken = await page.evaluate(() =>
+    [...document.images].filter((img) => img.checkVisibility() && (!img.complete || img.naturalWidth === 0)).map((img) => img.src),
+  );
+  expect(broken).toEqual([]);
+  const laptop = page.locator('img[src*="/welcome/desktop-"]');
+  if (testInfo.project.name === "mobile") {
+    for (const img of await laptop.all()) await expect(img).toBeHidden();
+  } else {
+    for (const img of await laptop.all()) await expect(img).toBeVisible();
+  }
+});
