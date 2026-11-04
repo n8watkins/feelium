@@ -210,7 +210,9 @@ Useful scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `test:data-operatio
 
 - The route guard (`src/proxy.ts`) only guards the app's own screens (`src/lib/app-paths.ts`), so an unknown path gets the styled 404 with a real 404 status, signed in or not.
 - Error pages offer Try again and a way home: `(app)/error.tsx` inside the app, `error.tsx` for public pages, and `global-error.tsx` when the root layout itself fails.
-- Cloudflare Web Analytics (cookie-free) loads only when the `CF_WEB_ANALYTICS_TOKEN` Worker variable is set (it is, in `wrangler.jsonc`); the script carries the CSP nonce and the policy allows its beacon host.
+- Cloudflare Web Analytics (cookie-free) loads only when the `CF_WEB_ANALYTICS_TOKEN` Worker secret is set; the script carries the CSP nonce and the policy allows its beacon host.
+  The token must belong to a Web Analytics site for the host `feelium.n8builds.dev`: the account's `n8builds.dev` site token is rejected there (its beacon posts get a 404).
+  Create the site in the dashboard (Analytics and Logs, Web Analytics, Add a site, `feelium.n8builds.dev`, manual setup), then `npx wrangler secret put CF_WEB_ANALYTICS_TOKEN`.
 - Sentry reports browser and Worker errors only when the `SENTRY_DSN` Worker secret is set: `npx wrangler secret put SENTRY_DSN`.
   Events carry no user, IP, cookies, headers, bodies or query strings (`src/lib/error-reporting.ts`), all errors are sent and 5% of requests are traced.
   Source maps are not uploaded yet.
