@@ -6,7 +6,6 @@ import {
   countAnswersByOutcomeForUser,
   countOutcomeAnswersForUser,
   createOutcomeForUser,
-  deleteOutcomeForUser,
   getOutcomeForUser,
   listActiveOutcomesForUser,
   listOutcomesForUser,
@@ -68,6 +67,3 @@ export async function moveOutcomeMetric(id: string, direction: "up" | "down") {
   return moveOutcomeForUser(db, await requireUserId(), id, direction);
 }
 
-export async function deleteOutcomeMetric(id: string, options?: { eraseAnswers?: boolean }) {
-  return deleteOutcomeForUser(db, await requireUserId(), id, options);
-}

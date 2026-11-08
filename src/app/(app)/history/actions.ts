@@ -4,17 +4,17 @@ import { revalidatePath } from "next/cache";
 
 import { deleteCheckIn } from "@/server/data";
 
-export type DeleteCheckInResult = { ok: boolean; error?: string };
+export type DeleteCheckInResult = { ok: true; undoId: string } | { ok: false; error: string };
 
 /**
- * Deletes a check-in from a History day. Values and tag links cascade in the data layer;
- * we revalidate every view that showed it so it does not reappear.
+ * Deletes a check-in at once, with its values and tag links, and returns the id its Undo
+ * uses (see undoDeleteAction). Every view that showed it is revalidated.
  */
 export async function deleteCheckInAction(
   id: string,
   date: string,
 ): Promise<DeleteCheckInResult> {
-  let removed: boolean;
+  let removed: Awaited<ReturnType<typeof deleteCheckIn>>;
   try {
     removed = await deleteCheckIn(id);
   } catch {
@@ -25,5 +25,5 @@ export async function deleteCheckInAction(
   revalidatePath("/today");
   revalidatePath("/history");
   revalidatePath(`/history/${date}`);
-  return { ok: true };
+  return { ok: true, undoId: removed.undoId };
 }

@@ -416,3 +416,28 @@ export const reminderDeliveryAttempts = sqliteTable(
     ),
   ],
 );
+
+export type UndoKind = "check_in" | "feeling" | "tag" | "category";
+
+// undo_entry: what a delete removed, kept for a minute so the Undo in its toast can put
+// it back exactly (same ids, same links). The snapshot is read only by its owner and is
+// purged once expired (src/server/data/undo-operations.ts), so a delete stays a delete.
+export const undoEntries = sqliteTable(
+  "undo_entry",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<UndoKind>().notNull(),
+    payload: text("payload").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("undo_entry_expires_idx").on(t.expiresAt),
+    check("undo_entry_kind_ck", sql`${t.kind} in ('check_in', 'feeling', 'tag', 'category')`),
+  ],
+);

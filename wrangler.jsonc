@@ -39,6 +39,9 @@
     "VAPID_SUBJECT": "mailto:nathancwatkins23@gmail.com"
   }
   // Secrets are set with `wrangler secret put <NAME>`, never in this file.
+  // Optional ones switch features on: SENTRY_DSN (error reporting, src/lib/error-reporting.ts)
+  // and CF_WEB_ANALYTICS_TOKEN (Cloudflare Web Analytics for feelium.n8builds.dev,
+  // src/components/web-analytics.tsx).
   // .dev.vars.example lists them (and generates their binding types); local
   // workerd runs read real values from .dev.vars.
 }

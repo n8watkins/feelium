@@ -190,37 +190,3 @@ export async function moveOutcomeForUser(
   );
   await database.batch([first, ...rest]);
 }
-
-/**
- * Deletes a feeling. With no answers, or when `eraseAnswers` is set, the row goes and its
- * answers go with it. Otherwise it is only marked deleted, so every
- * past check-in still shows what was recorded. Returns which of the two happened, or null
- * when there was nothing of the user's to delete.
- */
-export async function deleteOutcomeForUser(
-  database: AppDatabase,
-  userId: string,
-  id: string,
-  { eraseAnswers = false }: { eraseAnswers?: boolean } = {},
-): Promise<"erased" | "kept-answers" | null> {
-  const existing = await getOutcomeForUser(database, userId, id);
-  if (!existing) return null;
-  const answers = await countOutcomeAnswersForUser(database, userId, id);
-  if (eraseAnswers || answers === 0) {
-    // Answers first, explicitly: one atomic batch that never relies on SQLite's
-    // foreign-key cascade being switched on for the connection.
-    await database.batch([
-      database
-        .delete(checkInValues)
-        .where(and(eq(checkInValues.outcomeMetricId, id), eq(checkInValues.userId, userId))),
-      database.delete(outcomeMetrics).where(owned(userId, id)),
-    ]);
-    return "erased";
-  }
-  const now = new Date();
-  await database
-    .update(outcomeMetrics)
-    .set({ isActive: false, archivedAt: existing.archivedAt ?? now, deletedAt: now, updatedAt: now })
-    .where(owned(userId, id));
-  return "kept-answers";
-}

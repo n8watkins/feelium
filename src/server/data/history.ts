@@ -466,16 +466,3 @@ export async function getDayDetail(date: string): Promise<DayDetail> {
 // Delete a check-in (PRD 15.3)
 // ---------------------------------------------------------------------------
 
-/**
- * Deletes one check-in the current user owns. Its values and tag links cascade
- * (foreign keys with ON DELETE CASCADE), so nothing is left orphaned and it never
- * resurfaces. Returns false if the id was not found for this user.
- */
-export async function deleteCheckIn(id: string): Promise<boolean> {
-  const userId = await requireUserId();
-  const removed = await db
-    .delete(checkIns)
-    .where(and(eq(checkIns.id, id), eq(checkIns.userId, userId)))
-    .returning({ id: checkIns.id });
-  return removed.length > 0;
-}

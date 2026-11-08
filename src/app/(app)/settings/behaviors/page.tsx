@@ -17,6 +17,7 @@ import {
   archiveBehaviorAction,
   moveBehaviorAction,
   reactivateBehaviorAction,
+  unarchiveBehaviorAction,
 } from "./actions";
 
 export const metadata = { title: "Behaviors" };
@@ -127,6 +128,7 @@ export default async function BehaviorsPage() {
                     id={behavior.id}
                     name={behavior.name}
                     action={archiveBehaviorAction}
+                    undoAction={unarchiveBehaviorAction}
                   />
                 </div>
               </li>

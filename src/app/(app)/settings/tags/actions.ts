@@ -34,7 +34,9 @@ export async function renameTagAction(formData: FormData) {
   }
 }
 
-export async function deleteTagAction(formData: FormData) {
-  await deleteTag(recordIdSchema.parse(String(formData.get("id") ?? "")));
+/** Deletes a tag at once; returns the id its Undo uses, or null if it was already gone. */
+export async function deleteTagAction(id: string): Promise<string | null> {
+  const removed = await deleteTag(recordIdSchema.parse(id));
   revalidatePath(LIST_PATH);
+  return removed?.undoId ?? null;
 }

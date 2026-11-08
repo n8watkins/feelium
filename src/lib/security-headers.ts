@@ -1,4 +1,22 @@
-export function buildContentSecurityPolicy(nonce: string, development: boolean) {
+/** Third-party hosts the page talks to, each only when its feature is switched on. */
+export type ExternalHosts = {
+  /** Cloudflare Web Analytics (CF_WEB_ANALYTICS_TOKEN). */
+  webAnalytics?: boolean;
+  /** The Sentry ingest origin from SENTRY_DSN. */
+  sentryOrigin?: string | null;
+};
+
+export function buildContentSecurityPolicy(
+  nonce: string,
+  development: boolean,
+  { webAnalytics = false, sentryOrigin = null }: ExternalHosts = {},
+) {
+  const connect = [
+    "'self'",
+    ...(webAnalytics ? ["https://cloudflareinsights.com"] : []),
+    ...(sentryOrigin ? [sentryOrigin] : []),
+    ...(development ? ["ws:", "http:"] : []),
+  ];
   // Sonner injects its stylesheet as an inline <style>: allowed by the hash of its exact
   // CSS. It appends the element empty and fills it in after, so the empty element is
   // checked first; the empty string's hash allows exactly that (an empty style, no CSS).
@@ -16,7 +34,8 @@ export function buildContentSecurityPolicy(nonce: string, development: boolean) 
         ]),
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    `connect-src 'self'${development ? " ws: http:" : ""}`,
+    // The analytics script itself is allowed by its nonce ('strict-dynamic' ignores hosts).
+    `connect-src ${connect.join(" ")}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "object-src 'none'",

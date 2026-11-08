@@ -110,18 +110,6 @@ export async function moveBehaviorCategoryForUser(
   return true;
 }
 
-export async function deleteBehaviorCategoryForUser(
-  database: AppDatabase,
-  userId: string,
-  id: string,
-): Promise<boolean> {
-  const rows = await database
-    .delete(behaviorCategories)
-    .where(and(eq(behaviorCategories.id, id), eq(behaviorCategories.userId, userId)))
-    .returning({ id: behaviorCategories.id });
-  return rows.length === 1;
-}
-
 export async function resolveOwnedBehaviorCategoryId(
   database: AppDatabase,
   userId: string,
