@@ -56,18 +56,18 @@
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.11",
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "eslint-config-next": "16.4.3",
     "release-kit": "github:n8watkins/release-kit#v2.8.1",
     "shadcn": "^4.23.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5",
+    "typescript": "^6",
     "wrangler": "4.157.0"
   },
   "overrides": {
