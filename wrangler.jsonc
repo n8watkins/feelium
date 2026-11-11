@@ -22,6 +22,18 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Workers Cache (worker/edge-cache.ts): Cloudflare's cache sits in front of the
+  // CachedPages entrypoint, so the landing page, share images and icons cost no CPU
+  // time once cached. The default entrypoint runs on every request and sends only
+  // those to CachedPages.
+  "cache": { "enabled": false },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedPages": { "type": "worker", "cache": { "enabled": true } }
+  },
+  // The cron calls the reminder code directly (worker/handlers.ts); "server-only"
+  // only guards against client bundles, which this Worker entry is not.
+  "alias": { "server-only": "./worker/server-only.ts" },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
