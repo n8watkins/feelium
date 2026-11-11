@@ -13,8 +13,9 @@
   // theme failed to apply before first paint (dark mode flashed light).
   "keep_names": false,
   // Served at https://feelium.n8builds.dev (a custom domain attached to this
-  // Worker in the dashboard) and at feelium.<account>.workers.dev.
-  "workers_dev": true,
+  // Worker in the dashboard). The workers.dev address is off, so all traffic
+  // goes through the zone (bot rules, cache).
+  "workers_dev": false,
   // Version preview URLs would run with this Worker's secrets, so a preview would
   // read and write the production database. Keep them off.
   "preview_urls": false,
