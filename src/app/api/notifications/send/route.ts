@@ -1,38 +1,16 @@
-import type { PushSubscription as WebPushSubscription } from "web-push";
-
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  claimReminderDelivery,
-  completeReminderDelivery,
-  deletePushSubscriptionForReminder,
-  disableInvalidReminder,
-  hasPendingPushSubscriptionsForReminder,
-  listReminderCandidates,
-  listPushSubscriptionsForReminder,
-  markPushSubscriptionAttempt,
-  releaseReminderDelivery,
-  renewReminderDelivery,
-  scheduleNextReminder,
-  purgeExpiredUndoEntries,
-  type ReminderCandidate,
-} from "@/server/data";
-import { evaluateReminder, type ReminderEvaluation } from "@/lib/reminders";
 import { isCronAuthorized } from "@/lib/cron-auth";
-import { errorSummary, logError } from "@/lib/log";
-import { isPushConfigured, sendPush } from "@/server/push/webpush";
+import {
+  DEFAULT_WINDOW_MINUTES,
+  sendDueReminders,
+} from "@/server/reminders/send-reminders";
 
 /**
- * Scheduled reminder-send endpoint (PRD 17).
- *
- * PRODUCTION: the Worker's Cron Trigger (wrangler.jsonc, worker/handlers.ts) calls this
- * endpoint in-process every five minutes with `Authorization: Bearer <CRON_SECRET>`; we
- * verify it against the CRON_SECRET env var. See docs/notifications-and-pwa.md for
- * operations.
- *
- * For each enabled reminder, if the resolved occurrence in its saved
- * timezone is within `window` minutes (default 10), we push the gentle daily reminder to
- * all of their subscribed devices and prune any that are gone.
+ * Reminder-send endpoint (PRD 17), for manual runs. The Worker's Cron Trigger calls
+ * sendDueReminders directly every five minutes (wrangler.jsonc, worker/handlers.ts); see
+ * docs/notifications-and-pwa.md for operations. Requires
+ * `Authorization: Bearer <CRON_SECRET>`.
  *
  * Manual/local testing (no cloud):
  *   curl -X POST "http://localhost:3002/api/notifications/send?secret=$CRON_SECRET"
@@ -43,18 +21,6 @@ import { isPushConfigured, sendPush } from "@/server/push/webpush";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const REMINDER_TITLE = "Ready for a quick check-in?";
-const REMINDER_BODY = "Take a moment to record what you did and how you felt.";
-const REMINDER_URL = "/today#checkin";
-const DEFAULT_WINDOW_MINUTES = 10;
-const MAX_CANDIDATES_PER_RUN = 100;
-const SEND_CONCURRENCY = 10;
-const MAX_SUBSCRIPTIONS_PER_USER_PER_RUN = 25;
-const SUBSCRIPTION_DISPATCH_BATCH_SIZE = 5;
-const REMINDER_DELIVERY_LEASE_MS = 2 * 60_000;
-const REMINDER_RETRY_DELAY_MS = 60_000;
-const MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION = 3;
-
 function isAuthorized(request: NextRequest): boolean {
   return isCronAuthorized(
     request.headers.get("authorization"),
@@ -64,267 +30,19 @@ function isAuthorized(request: NextRequest): boolean {
   );
 }
 
-async function handle(request: NextRequest) {
+export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized" },
       { status: 401 },
     );
   }
-  // Housekeeping on the same five-minute clock: expired Undo snapshots go for good.
-  await purgeExpiredUndoEntries().catch((error) =>
-    logError({ event: "undo_purge_failed", reason: "purge_threw", route: "/api/notifications/send", error: errorSummary(error) }),
-  );
-  if (!isPushConfigured()) {
-    return NextResponse.json(
-      { ok: false, error: "Web Push is not configured on the server." },
-      { status: 503 },
-    );
-  }
-
   const params = request.nextUrl.searchParams;
   const windowMinutes = Math.max(
     1,
     Math.min(60, Number(params.get("window")) || DEFAULT_WINDOW_MINUTES),
   );
   const dryRun = params.get("dryRun") === "1";
-  const now = new Date();
-
-  const candidates = await listReminderCandidates(now, MAX_CANDIDATES_PER_RUN);
-  const evaluated: Array<ReminderCandidate & ReminderEvaluation> = [];
-  const invalid: ReminderCandidate[] = [];
-  for (const reminder of candidates) {
-    try {
-      const evaluation = evaluateReminder(
-        reminder.reminderTime,
-        reminder.timezone,
-        now,
-        windowMinutes,
-      );
-      evaluated.push({
-        ...reminder,
-        ...evaluation,
-        due: evaluation.due || reminder.deliveryLocalDate !== null,
-        localDate: reminder.deliveryLocalDate ?? evaluation.localDate,
-        occurrenceAt: reminder.deliveryOccurrenceAt ?? evaluation.occurrenceAt,
-      });
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        [
-          "INVALID_REMINDER_TIME",
-          "INVALID_TIMEZONE",
-          "UNRESOLVABLE_REMINDER_TIME",
-        ].includes(error.message)
-      ) {
-        invalid.push(reminder);
-        continue;
-      }
-      throw error;
-    }
-  }
-  const due = evaluated.filter((reminder) => reminder.due);
-  const dueUsers = new Set(due.map((reminder) => reminder.userId)).size;
-
-  if (dryRun) {
-    return NextResponse.json({
-      ok: true,
-      dryRun: true,
-      windowMinutes,
-      candidates: candidates.length,
-      invalidCandidates: invalid.length,
-      dueUsers,
-      dueReminders: due.length,
-      due: due.map((r) => ({
-        reminderId: r.id,
-        userId: r.userId,
-        reminderTime: r.reminderTime,
-        timezone: r.timezone,
-        localDate: r.localDate,
-        occurrenceAt: r.occurrenceAt,
-      })),
-    });
-  }
-
-  let sent = 0;
-  let pruned = 0;
-  let failed = 0;
-  let claimedReminders = 0;
-  const disabledInvalid = (
-    await Promise.all(invalid.map(disableInvalidReminder))
-  ).filter(Boolean).length;
-  const notDue = evaluated.filter((reminder) => !reminder.due);
-  await Promise.all(
-    notDue.map((reminder) => scheduleNextReminder(reminder, reminder.nextAt)),
-  );
-
-  async function sendForReminder(reminder: (typeof due)[number]) {
-    let userSent = 0;
-    let userPruned = 0;
-    let userFailed = 0;
-    let claimToken: string | null = null;
-    let hasPendingSubscriptions = true;
-    let ownsLease = true;
-    try {
-      claimToken = await claimReminderDelivery(
-        reminder,
-        reminder.localDate,
-        reminder.occurrenceAt,
-        new Date(),
-        REMINDER_DELIVERY_LEASE_MS,
-      );
-      if (!claimToken) {
-        return;
-      }
-      claimedReminders += 1;
-
-      const subscriptions = await listPushSubscriptionsForReminder(
-        reminder.id,
-        reminder.userId,
-        reminder.occurrenceAt,
-        MAX_SUBSCRIPTIONS_PER_USER_PER_RUN,
-      );
-      for (
-        let offset = 0;
-        offset < subscriptions.length;
-        offset += SUBSCRIPTION_DISPATCH_BATCH_SIZE
-      ) {
-        ownsLease = await renewReminderDelivery(
-          reminder.id,
-          reminder.userId,
-          reminder.localDate,
-          reminder.occurrenceAt,
-          claimToken,
-          new Date(),
-          REMINDER_DELIVERY_LEASE_MS,
-        );
-        if (!ownsLease) break;
-
-        const results = await Promise.all(
-          subscriptions
-            .slice(offset, offset + SUBSCRIPTION_DISPATCH_BATCH_SIZE)
-            .map(async (subscription) => ({
-              subscription,
-              result: await sendPush(
-                subscription.subscriptionData as unknown as WebPushSubscription,
-                {
-                  title: REMINDER_TITLE,
-                  body: REMINDER_BODY,
-                  url: REMINDER_URL,
-                },
-              ),
-            })),
-        );
-        for (const { subscription, result } of results) {
-          const mutatedAt = new Date();
-          let mutationApplied: boolean;
-          if (result.ok) {
-            mutationApplied = await markPushSubscriptionAttempt(
-              subscription.id,
-              reminder.id,
-              reminder.userId,
-              reminder.localDate,
-              reminder.occurrenceAt,
-              claimToken,
-              true,
-              mutatedAt,
-              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
-            );
-            userSent += 1;
-          } else if (result.gone) {
-            mutationApplied = await deletePushSubscriptionForReminder(
-              subscription.id,
-              reminder.id,
-              reminder.userId,
-              reminder.localDate,
-              reminder.occurrenceAt,
-              claimToken,
-              mutatedAt,
-            );
-            userPruned += 1;
-          } else {
-            mutationApplied = await markPushSubscriptionAttempt(
-              subscription.id,
-              reminder.id,
-              reminder.userId,
-              reminder.localDate,
-              reminder.occurrenceAt,
-              claimToken,
-              false,
-              mutatedAt,
-              MAX_TRANSIENT_FAILURES_PER_SUBSCRIPTION,
-            );
-            userFailed += 1;
-          }
-          if (!mutationApplied) ownsLease = false;
-        }
-        if (!ownsLease) break;
-      }
-      if (ownsLease) {
-        hasPendingSubscriptions = await hasPendingPushSubscriptionsForReminder(
-          reminder.id,
-          reminder.userId,
-          reminder.occurrenceAt,
-        );
-      }
-    } catch {
-      userFailed += 1;
-    }
-
-    sent += userSent;
-    pruned += userPruned;
-    failed += userFailed;
-    if (!claimToken || !ownsLease) return;
-    try {
-      const finalizedAt = new Date();
-      let finalized: boolean;
-      if (hasPendingSubscriptions) {
-        finalized = await releaseReminderDelivery(
-          reminder.id,
-          reminder.userId,
-          reminder.localDate,
-          reminder.occurrenceAt,
-          claimToken,
-          finalizedAt,
-          new Date(finalizedAt.getTime() + REMINDER_RETRY_DELAY_MS),
-        );
-      } else {
-        finalized = await completeReminderDelivery(
-          reminder.id,
-          reminder.userId,
-          reminder.localDate,
-          reminder.occurrenceAt,
-          claimToken,
-          finalizedAt,
-          reminder.nextAt,
-        );
-      }
-      if (!finalized) failed += 1;
-    } catch {
-      failed += 1;
-    }
-  }
-
-  for (let offset = 0; offset < due.length; offset += SEND_CONCURRENCY) {
-    await Promise.all(
-      due.slice(offset, offset + SEND_CONCURRENCY).map(sendForReminder),
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    candidates: candidates.length,
-    disabledInvalid,
-    dueUsers,
-    dueReminders: due.length,
-    claimedReminders,
-    sent,
-    pruned,
-    failed,
-  });
+  const { status, body } = await sendDueReminders({ windowMinutes, dryRun });
+  return NextResponse.json(body, { status });
 }
-
-export async function POST(request: NextRequest) {
-  return handle(request);
-}
-
