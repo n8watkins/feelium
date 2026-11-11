@@ -63,12 +63,13 @@ Everything degrades gracefully when the keys are absent: the app still runs, and
 ## Reminder delivery (production)
 
 The actual scheduled send needs a server trigger.
-On Cloudflare, a Cron Trigger (`2-57/5 * * * *` in `wrangler.jsonc`) calls the endpoint every five minutes in-process (`worker/handlers.ts`), with `CRON_SECRET` as the bearer token.
+On Cloudflare, a Cron Trigger (`2-57/5 * * * *` in `wrangler.jsonc`) runs the send every five minutes by calling `sendDueReminders` (`src/server/reminders/send-reminders.ts`) directly from `worker/handlers.ts`, without a request through Next.js, so each run costs a few milliseconds of CPU instead of a cold Next.js request.
+The endpoint below runs the same code for manual runs.
 It is the only caller.
 
 `POST` `/api/notifications/send` (GET is refused since 2026-11-03):
 
-- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, which the Cron Trigger attaches, compared in constant time (`src/lib/cron-auth.ts`).
+- Authenticated in production with `Authorization: Bearer <CRON_SECRET>`, compared in constant time (`src/lib/cron-auth.ts`).
 - Local development also accepts a `?secret=<CRON_SECRET>` query parameter for manual testing, but production never accepts secrets in URLs.
 - The database stores each reminder's next UTC occurrence, so cron reads at most 100 candidates instead of scanning every enabled reminder.
 - If a candidate's resolved UTC occurrence is within `window` minutes (default 10), the job begins pushing the gentle reminder to its subscribed devices, including at the first valid minute after a skipped spring-forward time.

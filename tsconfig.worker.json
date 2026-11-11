@@ -10,7 +10,9 @@
     "skipLibCheck": true,
     "module": "esnext",
     "moduleResolution": "bundler",
-    "isolatedModules": true
+    "isolatedModules": true,
+    // The cron imports the reminder code from src/ (worker/index.ts).
+    "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["worker", "cloudflare-env.d.ts"]
+  "include": ["worker", "cloudflare-env.d.ts", "src/types/next-auth.d.ts"]
 }
